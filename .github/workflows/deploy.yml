@@ -1,0 +1,103 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-demo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, type-check and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
+  deploy:
+    name: Deploy to Lightsail
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check deploy settings
+        id: cfg
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+        run: |
+          if [ -z "$HOST" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Deploy skipped: the LIGHTSAIL_HOST secret is not set yet (see docs/SETUP.md)."
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.enabled == 'true'
+
+      - name: Build the app image
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          docker build -t mtc-membership:latest -t "mtc-membership:${GITHUB_SHA::12}" .
+          docker save mtc-membership:latest "mtc-membership:${GITHUB_SHA::12}" | gzip > image.tar.gz
+          ls -lh image.tar.gz
+
+      - name: Set up SSH
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Copy image and server files
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+        run: |
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes \
+            image.tar.gz deploy/docker-compose.yml deploy/Caddyfile \
+            "deploy@${HOST}:/opt/mtc/"
+
+      - name: Start the new version
+        if: steps.cfg.outputs.enabled == 'true'
+        env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes "deploy@${HOST}" bash -s <<'EOF'
+          set -euo pipefail
+          cd /opt/mtc
+          gunzip -c image.tar.gz | docker load
+          rm -f image.tar.gz
+          docker compose up -d --remove-orphans
+          echo "Waiting for the app to report healthy..."
+          for i in $(seq 1 30); do
+            if docker compose exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then
+              echo "App is healthy."
+              docker image prune -f >/dev/null
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "App did not become healthy. Recent logs:"
+          docker compose logs --tail=80 migrate app
+          exit 1
+          EOF

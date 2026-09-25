@@ -1,0 +1,61 @@
+# Runs on the Lightsail instance in /opt/mtc.
+# The deploy workflow copies this file, the Caddyfile and the app image here,
+# then runs `docker compose up -d`. Secrets live in /opt/mtc/.env (never in git).
+name: mtc
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mtc
+      POSTGRES_USER: mtc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mtc -d mtc"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot: applies database migrations and reference data, then exits.
+  migrate:
+    image: mtc-membership:latest
+    command: ["node", "migrate.cjs"]
+    env_file: .env
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    image: mtc-membership:latest
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?set SITE_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

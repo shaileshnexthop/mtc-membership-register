@@ -1,0 +1,16 @@
+# Caddy obtains and renews the HTTPS certificate for SITE_DOMAIN automatically.
+{$SITE_DOMAIN} {
+	encode zstd gzip
+
+	# Document uploads are limited to 10 MB each by the app; leave headroom here.
+	request_body {
+		max_size 25MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+
+	reverse_proxy app:3000
+}

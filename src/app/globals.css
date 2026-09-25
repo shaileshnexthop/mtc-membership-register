@@ -1,0 +1,101 @@
+/* MTC colours, taken from the Club's application form. */
+:root {
+  --mtc-navy: #1b2f6b;
+  --mtc-navy-dark: #13224f;
+  --mtc-red: #c62032;
+  --mtc-red-text: #b01c2c;
+  --ground: #f6f4ef;
+  --surface: #ffffff;
+  --surface-muted: #f1eee7;
+  --navy-tint: #eef1f8;
+  --line: #e2dcd0;
+  --line-strong: #bfb8aa;
+  --ink: #16181d;
+  --ink-2: #3d424c;
+  --muted: #5b606b;
+  --ok-bg: #e6f2ea;
+  --ok: #1e6b45;
+  --warn-bg: #fff3d6;
+  --warn: #7a4b00;
+  --bad-bg: #fbe9ea;
+  --bad: #9e1b28;
+  --focus: #9db3e8;
+
+  --font-display: "Libre Caslon Text", Georgia, serif;
+  --font-body: "Public Sans", system-ui, sans-serif;
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100vh;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--mtc-navy);
+}
+a:hover {
+  color: var(--mtc-red);
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  color: var(--mtc-navy-dark);
+  line-height: 1.2;
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="password"],
+input[type="date"],
+select,
+textarea {
+  width: 100%;
+  min-height: 44px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+}
+
+:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+button {
+  cursor: pointer;
+}
+button:disabled {
+  cursor: not-allowed;
+}
