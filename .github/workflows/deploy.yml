@@ -63,10 +63,15 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
         run: |
           install -d -m 700 ~/.ssh
-          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          # Strip Windows line endings that can come from copy-paste.
+          printf '%s\n' "$SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$KNOWN_HOSTS" | tr -d '\r' > ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
+          echo "Key check:"
+          ssh-keygen -l -f ~/.ssh/deploy_key || echo "::error::LIGHTSAIL_SSH_KEY is not a valid private key"
+          echo "Server check:"
+          ssh-keygen -l -f ~/.ssh/known_hosts || echo "::error::LIGHTSAIL_KNOWN_HOSTS is not a valid host key line"
 
       - name: Copy image and server files
         if: steps.cfg.outputs.enabled == 'true'
