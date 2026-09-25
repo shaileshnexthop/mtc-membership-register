@@ -68,6 +68,8 @@ export async function getCurrentAccount() {
       id: schema.accounts.id,
       email: schema.accounts.email,
       fullName: schema.accounts.fullName,
+      lastName: schema.accounts.lastName,
+      firstNames: schema.accounts.firstNames,
       emailVerifiedAt: schema.accounts.emailVerifiedAt,
     })
     .from(schema.accounts)

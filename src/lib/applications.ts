@@ -112,6 +112,9 @@ export async function createDraft(accountId: string) {
       reference,
       accountId,
       membershipTypeId: defaultType?.id ?? null,
+      // Nom and Prénoms come from the signed-in account; the applicant can still correct them.
+      lastName: account?.lastName ?? splitFullName(account?.fullName).lastName,
+      firstNames: account?.firstNames ?? splitFullName(account?.fullName).firstNames,
       mobilePhone: account?.mobilePhone ?? null,
     })
     .returning();
@@ -124,6 +127,20 @@ export async function createDraft(accountId: string) {
     toStatus: "draft",
   });
   return app;
+}
+
+/**
+ * Fallback for accounts created before Nom and Prénoms were asked separately:
+ * the last word is taken as the Nom.
+ */
+export function splitFullName(fullName: string | null | undefined): {
+  lastName: string | null;
+  firstNames: string | null;
+} {
+  const parts = (fullName ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { lastName: null, firstNames: null };
+  if (parts.length === 1) return { lastName: parts[0], firstNames: null };
+  return { lastName: parts.at(-1)!, firstNames: parts.slice(0, -1).join(" ") };
 }
 
 export async function getSponsors(applicationId: string) {

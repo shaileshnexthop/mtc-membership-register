@@ -150,7 +150,9 @@ export const accounts = pgTable(
     id: id(),
     email: text("email").notNull(), // stored lower-case
     passwordHash: text("password_hash").notNull(),
-    fullName: text("full_name").notNull(),
+    fullName: text("full_name").notNull(), // display name: "Prénoms Nom"
+    lastName: text("last_name"), // Nom, as on the application form
+    firstNames: text("first_names"), // Prénoms
     mobilePhone: text("mobile_phone"),
     emailVerifiedAt: ts("email_verified_at"),
     failedLogins: smallint("failed_logins").notNull().default(0),

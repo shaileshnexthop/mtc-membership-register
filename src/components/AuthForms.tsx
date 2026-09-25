@@ -85,7 +85,8 @@ export function RegisterForm() {
   return (
     <form action={action} className={s.form} noValidate>
       <Alerts state={state} />
-      <Field id="fullName" label="Nom et prénoms" autoComplete="name" state={state} />
+      <Field id="lastName" label="Nom" autoComplete="family-name" state={state} />
+      <Field id="firstNames" label="Prénoms" autoComplete="given-name" state={state} />
       <Field id="email" label="Adresse courriel" type="email" autoComplete="email" state={state} />
       <Field
         id="mobilePhone"

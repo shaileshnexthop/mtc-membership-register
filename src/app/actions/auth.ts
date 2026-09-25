@@ -58,7 +58,8 @@ async function sendVerification(account: { id: string; email: string; fullName: 
 
 const registerSchema = z
   .object({
-    fullName: z.string().trim().min(3, { error: "Indiquez vos nom et prénoms." }).max(150),
+    lastName: z.string().trim().min(1, { error: "Indiquez votre nom." }).max(100),
+    firstNames: z.string().trim().min(1, { error: "Indiquez vos prénoms." }).max(150),
     email: z.email({ error: "Adresse courriel invalide." }).max(254),
     mobilePhone: z
       .string()
@@ -75,7 +76,8 @@ const registerSchema = z
 
 export async function register(_prev: FormState, fd: FormData): Promise<FormState> {
   const values = {
-    fullName: str(fd, "fullName"),
+    lastName: str(fd, "lastName"),
+    firstNames: str(fd, "firstNames"),
     email: normaliseEmail(str(fd, "email")),
     mobilePhone: str(fd, "mobilePhone"),
   };
@@ -119,7 +121,9 @@ export async function register(_prev: FormState, fd: FormData): Promise<FormStat
       .insert(schema.accounts)
       .values({
         email: values.email,
-        fullName: values.fullName,
+        fullName: `${values.firstNames} ${values.lastName}`,
+        lastName: values.lastName,
+        firstNames: values.firstNames,
         mobilePhone: values.mobilePhone,
         passwordHash: await hashPassword(parsed.data.password),
       })

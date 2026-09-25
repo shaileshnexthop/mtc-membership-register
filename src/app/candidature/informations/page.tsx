@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ApplicationShell, loadEditableApplication } from "@/components/ApplicationShell";
 import { PersonalForm } from "@/components/ApplicationForms";
-import { getActiveMembershipTypes } from "@/lib/applications";
+import { getActiveMembershipTypes, splitFullName } from "@/lib/applications";
 import { formatMur } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Candidature – Informations personnelles" };
@@ -9,10 +9,15 @@ export const metadata: Metadata = { title: "Candidature – Informations personn
 export default async function PersonalStep() {
   const { account, app, completeness } = await loadEditableApplication();
   const types = await getActiveMembershipTypes();
+  // Prefill from the signed-in account when the draft has no name yet.
+  const fromAccount = {
+    lastName: account.lastName ?? splitFullName(account.fullName).lastName ?? "",
+    firstNames: account.firstNames ?? splitFullName(account.fullName).firstNames ?? "",
+  };
   const values: Record<string, string> = {
     membershipTypeId: app.membershipTypeId ?? "",
-    lastName: app.lastName ?? "",
-    firstNames: app.firstNames ?? "",
+    lastName: app.lastName ?? fromAccount.lastName,
+    firstNames: app.firstNames ?? fromAccount.firstNames,
     dateOfBirth: app.dateOfBirth ?? "",
     nationality: app.nationality ?? "",
     idNumber: app.idNumber ?? "",
