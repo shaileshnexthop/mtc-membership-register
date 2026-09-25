@@ -49,16 +49,10 @@ jobs:
       - uses: actions/checkout@v4
         if: steps.cfg.outputs.enabled == 'true'
 
-      - name: Build the app image
-        if: steps.cfg.outputs.enabled == 'true'
-        run: |
-          docker build -t mtc-membership:latest -t "mtc-membership:${GITHUB_SHA::12}" .
-          docker save mtc-membership:latest "mtc-membership:${GITHUB_SHA::12}" | gzip > image.tar.gz
-          ls -lh image.tar.gz
-
       - name: Set up SSH
         if: steps.cfg.outputs.enabled == 'true'
         env:
+          HOST: ${{ secrets.LIGHTSAIL_HOST }}
           SSH_KEY: ${{ secrets.LIGHTSAIL_SSH_KEY }}
           KNOWN_HOSTS: ${{ secrets.LIGHTSAIL_KNOWN_HOSTS }}
         run: |
@@ -72,6 +66,20 @@ jobs:
           ssh-keygen -l -f ~/.ssh/deploy_key || echo "::error::LIGHTSAIL_SSH_KEY is not a valid private key"
           echo "Server check:"
           ssh-keygen -l -f ~/.ssh/known_hosts || echo "::error::LIGHTSAIL_KNOWN_HOSTS is not a valid host key line"
+          echo "Fingerprint in LIGHTSAIL_KNOWN_HOSTS:"
+          ssh-keygen -l -f ~/.ssh/known_hosts | awk '{print $2}'
+          echo "Fingerprint the server presents now:"
+          ssh-keyscan -T 15 -t ed25519 "$HOST" 2>/dev/null | ssh-keygen -l -f - | awk '{print $2}' || echo "(could not reach the server on port 22)"
+          echo "Test login as deploy:"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=20 \
+            "deploy@${HOST}" 'echo "Logged in as $(whoami) on $(hostname)"'
+
+      - name: Build the app image
+        if: steps.cfg.outputs.enabled == 'true'
+        run: |
+          docker build -t mtc-membership:latest -t "mtc-membership:${GITHUB_SHA::12}" .
+          docker save mtc-membership:latest "mtc-membership:${GITHUB_SHA::12}" | gzip > image.tar.gz
+          ls -lh image.tar.gz
 
       - name: Copy image and server files
         if: steps.cfg.outputs.enabled == 'true'
