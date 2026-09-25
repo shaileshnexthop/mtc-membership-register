@@ -66,7 +66,7 @@ Fill in the empty values as each service is ready:
 
 ```bash
 sudo -u deploy nano /opt/mtc/.env
-cd /opt/mtc && sudo -u deploy docker compose up -d --force-recreate app
+sudo -u deploy docker compose --project-directory /opt/mtc up -d --force-recreate app
 ```
 
 ### Document storage (Lightsail bucket)
@@ -116,9 +116,14 @@ Set the `MIPS_*` values when they arrive.
 
 ## Useful commands on the server
 
+Run these as the default `ubuntu` user (it cannot `cd` into `/opt/mtc`, so each command names the folder):
+
 ```bash
-cd /opt/mtc
-sudo -u deploy docker compose ps            # what is running
-sudo -u deploy docker compose logs -f app   # live app logs
-sudo -u deploy docker compose restart app   # restart the app
+sudo -u deploy docker compose --project-directory /opt/mtc ps                 # what is running
+sudo -u deploy docker compose --project-directory /opt/mtc logs --tail=50 app # recent app logs
+sudo -u deploy docker compose --project-directory /opt/mtc restart app        # restart the app
+sudo -u deploy docker compose --project-directory /opt/mtc exec db psql -U mtc -d mtc   # database console (\q to quit)
 ```
+
+Lightsail's browser terminal adds a blank line after each pasted line. Paste one command at a
+time, and avoid commands split over several lines with `\`.
