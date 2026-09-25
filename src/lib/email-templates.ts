@@ -1,4 +1,5 @@
 import "server-only";
+import { appBaseUrl } from "./config";
 
 /**
  * Applicant-facing email templates, in French. These are the defaults; they
@@ -12,7 +13,7 @@ function layout(title: string, bodyHtml: string): string {
   return `<!doctype html><html lang="fr"><body style="margin:0;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#16181d">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f4ef;padding:24px 0"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2dcd0;border-radius:8px">
-<tr><td style="background:#1b2f6b;border-bottom:4px solid #c62032;padding:18px 24px;color:#ffffff;font-family:Georgia,serif;font-weight:bold;letter-spacing:1px">THE MAURITIUS TURF CLUB</td></tr>
+<tr><td style="padding:16px 24px;border-bottom:1px solid #e2dcd0"><img src="${esc(appBaseUrl())}/mtcjc-logo.png" width="81" height="60" alt="MTC Jockey Club" style="display:block;border:0"></td></tr>
 <tr><td style="padding:28px 24px;font-size:15px;line-height:1.55">
 <h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:22px;color:#13224f">${esc(title)}</h1>
 ${bodyHtml}
