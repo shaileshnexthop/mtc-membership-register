@@ -18,7 +18,9 @@ Replace `<domain>` below with the demo subdomain, e.g. `mtc-demo.example.mu`.
 1. **Networking** tab → **Create static IP** and attach it to `mtc-demo`.
 2. IPv4 firewall:
    - HTTP (80) and HTTPS (443): allow all.
-   - SSH (22): **restrict to your office IP**. Tick *Allow Lightsail browser SSH* so the browser console keeps working.
+   - SSH (22): allow all. GitHub Actions deploys over SSH from changing IP addresses, so SSH
+     cannot be limited to one office IP. The server only accepts keys (no passwords) and
+     fail2ban blocks repeated failed attempts.
 3. At your DNS provider, add an **A record**: `<domain>` → the static IP.
 
 ## 3. Deploy key (on your own computer)
