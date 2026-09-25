@@ -64,3 +64,41 @@ ${button(link, "Choisir un nouveau mot de passe")}
   const text = `Bonjour ${name},\n\nPour choisir un nouveau mot de passe, ouvrez ce lien (valable 1 heure) :\n${link}\n\nSi vous n’avez rien demandé, ignorez ce message.`;
   return { subject, html, text };
 }
+
+export function applicationSubmittedEmail(name: string, reference: string, trackLink: string) {
+  const subject = `Candidature ${reference} reçue – Mauritius Turf Club`;
+  const html = layout(
+    "Votre candidature a bien été reçue",
+    `<p>Bonjour ${esc(name)},</p>
+<p>Nous accusons réception de votre candidature <strong>${esc(reference)}</strong> pour devenir Membre du Mauritius Turf Club.</p>
+<p>Prochaines étapes :</p>
+<ol style="padding-left:20px">
+<li>Vos parrains reçoivent un courriel les invitant à confirmer leur parrainage.</li>
+<li>Le Club examine votre dossier (vérification des documents et Compliance Review).</li>
+<li>Vous serez informé(e) de la décision par courriel.</li>
+</ol>
+<p>Nous vous rappelons que le dépôt de ce formulaire ne constitue ni une admission, ni un droit à devenir membre du Club.</p>
+${button(trackLink, "Suivre ma candidature")}`,
+  );
+  const text = `Bonjour ${name},\n\nNous accusons réception de votre candidature ${reference}.\nVos parrains vont recevoir un courriel de confirmation, puis le Club examinera votre dossier. Vous serez informé(e) de la décision par courriel.\n\nSuivre ma candidature : ${trackLink}`;
+  return { subject, html, text };
+}
+
+export function sponsorRequestEmail(
+  sponsorName: string,
+  applicantName: string,
+  reference: string,
+  link: string,
+) {
+  const subject = `Demande de parrainage pour ${applicantName} – Mauritius Turf Club`;
+  const html = layout(
+    "Demande de parrainage",
+    `<p>Bonjour ${esc(sponsorName)},</p>
+<p><strong>${esc(applicantName)}</strong> a déposé une candidature (${esc(reference)}) pour devenir Membre du Mauritius Turf Club et vous a indiqué(e) comme parrain.</p>
+<p>Merci de confirmer ou de décliner ce parrainage. Votre confirmation électronique remplace la signature sur le formulaire papier.</p>
+${button(link, "Répondre à la demande")}
+<p style="font-size:13px;color:#5b606b">Si vous ne connaissez pas cette personne, choisissez « Je décline » sur la page.</p>`,
+  );
+  const text = `Bonjour ${sponsorName},\n\n${applicantName} a déposé une candidature (${reference}) pour devenir Membre du Mauritius Turf Club et vous a indiqué(e) comme parrain.\nMerci de confirmer ou de décliner ce parrainage : ${link}`;
+  return { subject, html, text };
+}
