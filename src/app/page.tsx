@@ -1,3 +1,4 @@
+import Link from "next/link";
 import styles from "./page.module.css";
 
 export default function Home() {
@@ -14,12 +15,12 @@ export default function Home() {
           candidature en ligne avec les documents requis.
         </p>
         <div className={styles.actions}>
-          <a className={styles.primary} href="/inscription">
+          <Link className={styles.primary} href="/inscription">
             Créer un compte
-          </a>
-          <a className={styles.secondary} href="/connexion">
+          </Link>
+          <Link className={styles.secondary} href="/connexion">
             Se connecter
-          </a>
+          </Link>
         </div>
         <p className={styles.staff}>
           Personnel du Club : <a href="/staff">connexion Microsoft 365</a>
