@@ -363,6 +363,11 @@ export const applicationSponsors = pgTable(
     confirmedAt: ts("confirmed_at"),
     declinedAt: ts("declined_at"),
     lastReminderAt: ts("last_reminder_at"),
+    // How the answer was obtained: "email" link, or recorded by staff after
+    // speaking to the sponsor ("phone", "in_person", "paper").
+    confirmationMethod: text("confirmation_method"),
+    confirmedByStaffId: uuid("confirmed_by_staff_id").references(() => staffUsers.id),
+    confirmationNote: text("confirmation_note"),
   },
   (t) => [
     uniqueIndex("application_sponsors_position_uq").on(

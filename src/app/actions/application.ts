@@ -309,7 +309,7 @@ export async function answerSponsorship(_prev: FormState, fd: FormData): Promise
   const now = new Date();
   await db
     .update(schema.applicationSponsors)
-    .set(answer === "confirm" ? { confirmedAt: now } : { declinedAt: now })
+    .set(answer === "confirm" ? { confirmedAt: now, confirmationMethod: "email" } : { declinedAt: now, confirmationMethod: "email" })
     .where(eq(schema.applicationSponsors.id, sp.id));
   await db.insert(schema.applicationEvents).values({
     applicationId: sp.applicationId,

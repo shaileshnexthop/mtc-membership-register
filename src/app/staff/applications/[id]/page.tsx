@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { StaffShell } from "@/components/StaffShell";
-import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm, ReopenForm } from "@/components/ReviewForms";
+import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm, ReopenForm, SponsorActions } from "@/components/ReviewForms";
 import { getBankDetails } from "@/lib/settings";
 import { muDate } from "@/lib/business-days";
 import { hasRole, requireStaffPage } from "@/lib/staff";
@@ -235,31 +235,44 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                 {sponsorsConfirmed} of {sponsors.length} confirmed
               </span>
             </div>
-            {sponsors.map((sp) => (
-              <div key={sp.id} className={s.row}>
-                <div className={s.rowMain}>
-                  <span className={s.rowTitle}>
-                    {sp.firstNames} {sp.lastName}
+            {sponsors.map((sp) => {
+              const how =
+                sp.confirmationMethod && sp.confirmationMethod !== "email"
+                  ? ` · ${{ phone: "by phone", in_person: "in person", paper: "on paper" }[sp.confirmationMethod] ?? sp.confirmationMethod}, recorded by ${staffName(sp.confirmedByStaffId)}${sp.confirmationNote ? ` — ${sp.confirmationNote}` : ""}`
+                  : sp.confirmationMethod === "email"
+                    ? " · by email link"
+                    : "";
+              return (
+                <div key={sp.id} className={s.row} data-sponsor={sp.position}>
+                  <div className={s.rowMain}>
+                    <span className={s.rowTitle}>
+                      {sp.firstNames} {sp.lastName}
+                    </span>
+                    <span className={s.rowMeta}>
+                      {sp.email}
+                      {sp.phone ? ` · ${sp.phone}` : ""}
+                    </span>
+                    <span className={s.note}>
+                      {sp.confirmedAt
+                        ? `Confirmed ${formatDateTimeEn(sp.confirmedAt)}${how}`
+                        : sp.declinedAt
+                          ? `Declined ${formatDateTimeEn(sp.declinedAt)}${how}`
+                          : sp.requestedAt
+                            ? `Request emailed ${formatDateEn(sp.requestedAt)}${sp.lastReminderAt ? `, resent ${formatDateEn(sp.lastReminderAt)}` : ""}`
+                            : "Not yet requested"}
+                    </span>
+                  </div>
+                  <span className={`${s.pill} ${sp.confirmedAt ? s.pillOk : sp.declinedAt ? s.pillBad : s.pillWarn}`}>
+                    {sp.confirmedAt ? "Confirmed" : sp.declinedAt ? "Declined" : "Awaiting"}
                   </span>
-                  <span className={s.rowMeta}>
-                    {sp.email}
-                    {sp.phone ? ` · ${sp.phone}` : ""}
-                  </span>
+                  {!sp.confirmedAt &&
+                  (app.status === "submitted" || app.status === "deferred") &&
+                  hasRole(staff, "reviewer", "compliance_officer", "administrator") ? (
+                    <SponsorActions sponsorId={sp.id} email={sp.email} />
+                  ) : null}
                 </div>
-                <span className={`${s.pill} ${sp.confirmedAt ? s.pillOk : sp.declinedAt ? s.pillBad : s.pillWarn}`}>
-                  {sp.confirmedAt ? "Confirmed" : sp.declinedAt ? "Declined" : "Awaiting"}
-                </span>
-                <span className={s.note} style={{ minWidth: 160 }}>
-                  {sp.confirmedAt
-                    ? formatDateTimeEn(sp.confirmedAt)
-                    : sp.declinedAt
-                      ? formatDateTimeEn(sp.declinedAt)
-                      : sp.requestedAt
-                        ? `Requested ${formatDateEn(sp.requestedAt)}`
-                        : "Not yet requested"}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </section>
         </div>
 

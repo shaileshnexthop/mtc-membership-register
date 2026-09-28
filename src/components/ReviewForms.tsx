@@ -5,7 +5,9 @@ import {
   addObservation,
   decideApplication,
   recordCompliance,
+  recordSponsorAnswer,
   reopenApplication,
+  resendSponsorRequest,
   reviewDocument,
 } from "@/app/actions/review";
 import { recordJoiningPayment } from "@/app/actions/payments";
@@ -289,5 +291,87 @@ export function ReopenForm({ applicationId }: { applicationId: string }) {
         </button>
       </div>
     </form>
+  );
+}
+
+/** Follow-up on a sponsor who has not answered: resend, or record the answer after speaking to them. */
+export function SponsorActions({ sponsorId, email }: { sponsorId: string; email: string }) {
+  const [mode, setMode] = useState<"" | "resend" | "record">("");
+  const [resendState, resendAction, resending] = useActionState(resendSponsorRequest.bind(null, sponsorId), {});
+  const [recordState, recordAction, recording] = useActionState(recordSponsorAnswer.bind(null, sponsorId), {});
+
+  if (recordState.message) return <Feedback state={recordState} />;
+  return (
+    <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: 10 }}>
+      {resendState.message && mode !== "resend" ? <Feedback state={resendState} /> : null}
+      {mode === "" ? (
+        <div className={s.rowActions} style={{ justifyContent: "flex-end" }}>
+          <button type="button" className={s.btn} onClick={() => setMode("resend")}>
+            Resend request
+          </button>
+          <button type="button" className={s.btnOk} onClick={() => setMode("record")}>
+            Record answer
+          </button>
+        </div>
+      ) : null}
+
+      {mode === "resend" ? (
+        <form action={resendAction} className={ui.form} style={{ gap: 10 }}>
+          <Feedback state={resendState} />
+          <div className={ui.field}>
+            <label htmlFor={`sp-email-${sponsorId}`} className={ui.label}>
+              Send to <span className={ui.hint}>(correct the address if it was wrong)</span>
+            </label>
+            <input id={`sp-email-${sponsorId}`} name="email" type="email" defaultValue={resendState.values?.email ?? email} />
+          </div>
+          <div className={s.rowActions}>
+            <button type="submit" className={s.btn} disabled={resending}>
+              {resending ? "Sending…" : "Send request"}
+            </button>
+            <button type="button" className={s.btn} onClick={() => setMode("")}>
+              Close
+            </button>
+          </div>
+        </form>
+      ) : null}
+
+      {mode === "record" ? (
+        <form action={recordAction} className={ui.form} style={{ gap: 10 }}>
+          <Feedback state={recordState} />
+          <div className={s.choice} style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+            <label>
+              <input type="radio" name="answer" value="confirm" defaultChecked /> Confirmed
+            </label>
+            <label>
+              <input type="radio" name="answer" value="decline" /> Declined
+            </label>
+          </div>
+          <div className={ui.field}>
+            <label htmlFor={`sp-method-${sponsorId}`} className={ui.label}>
+              How
+            </label>
+            <select id={`sp-method-${sponsorId}`} name="method" defaultValue="phone">
+              <option value="phone">By phone</option>
+              <option value="in_person">In person</option>
+              <option value="paper">Signed on paper</option>
+            </select>
+          </div>
+          <div className={ui.field}>
+            <label htmlFor={`sp-note-${sponsorId}`} className={ui.label}>
+              Note <span className={ui.hint}>(required, e.g. who you spoke to and when)</span>
+            </label>
+            <input id={`sp-note-${sponsorId}`} name="note" type="text" defaultValue={recordState.values?.note ?? ""} />
+          </div>
+          <div className={s.rowActions}>
+            <button type="submit" className={s.btnOk} disabled={recording}>
+              {recording ? "Saving…" : "Save answer"}
+            </button>
+            <button type="button" className={s.btn} onClick={() => setMode("")}>
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </div>
   );
 }

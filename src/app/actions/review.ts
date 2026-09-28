@@ -12,7 +12,9 @@ import { addBusinessDays } from "@/lib/business-days";
 import { formatDateFr, formatMur } from "@/lib/format";
 import { DOCUMENT_REQUIREMENTS } from "@/lib/applications";
 import { getBankDetails } from "@/lib/settings";
+import { randomToken, sha256 } from "@/lib/crypto";
 import {
+  sponsorRequestEmail,
   applicationApprovedEmail,
   applicationDeferredEmail,
   applicationRejectedEmail,
@@ -327,4 +329,129 @@ export async function reopenApplication(applicationId: string, _prev: FormState,
         ? "Reopened and back in the review queue."
         : "Reopened. The applicant has been emailed the reason and can edit and resubmit.",
   };
+}
+
+/* ------------------------------------------------------------------ */
+/* APP-07 follow-up by staff: resend or record a sponsor's answer      */
+/* ------------------------------------------------------------------ */
+
+async function loadSponsor(sponsorId: string) {
+  const [sp] = await getDb()
+    .select()
+    .from(schema.applicationSponsors)
+    .where(eq(schema.applicationSponsors.id, sponsorId))
+    .limit(1);
+  if (!sp) return null;
+  const app = await loadApp(sp.applicationId);
+  return app ? { sp, app } : null;
+}
+
+const SPONSOR_OPEN_STATUSES = ["submitted", "deferred"];
+
+/** Sends the confirmation request again, optionally to a corrected address. */
+export async function resendSponsorRequest(sponsorId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const staff = await requireStaffAction("reviewer", "compliance_officer", "administrator");
+  const email = str(fd, "email").toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address.", values: { email } };
+  const found = await loadSponsor(sponsorId);
+  if (!found || !SPONSOR_OPEN_STATUSES.includes(found.app.status)) return { error: "This sponsor can no longer be contacted from here." };
+  const { sp, app } = found;
+  if (sp.confirmedAt) return { error: "This sponsor has already confirmed." };
+
+  const db = getDb();
+  const [acc] = await db.select().from(schema.accounts).where(eq(schema.accounts.id, app.accountId)).limit(1);
+  if (email === acc.email) return { error: "The applicant cannot sponsor themselves.", values: { email } };
+
+  const token = randomToken(32);
+  const now = new Date();
+  await db
+    .update(schema.applicationSponsors)
+    .set({
+      email,
+      confirmTokenHash: sha256(token),
+      declinedAt: null,
+      requestedAt: sp.requestedAt ?? now,
+      lastReminderAt: now,
+    })
+    .where(eq(schema.applicationSponsors.id, sp.id));
+
+  const applicantName = `${app.firstNames ?? ""} ${app.lastName ?? ""}`.trim() || acc.fullName;
+  const mail = sponsorRequestEmail(
+    `${sp.firstNames} ${sp.lastName}`,
+    applicantName,
+    app.reference,
+    `${appBaseUrl()}/parrainage?token=${encodeURIComponent(token)}`,
+  );
+  await sendEmail({ to: email, templateKey: "sponsor_request", applicationId: app.id, staffUserId: staff.id, ...mail });
+
+  const changed = email !== sp.email;
+  await db.insert(schema.applicationEvents).values({
+    applicationId: app.id,
+    actorType: "staff",
+    staffUserId: staff.id,
+    eventType: "sponsor_request_resent",
+    subject: "Parrainage",
+    comment: `Request resent to ${sp.firstNames} ${sp.lastName} by ${staff.displayName}${changed ? ` (address corrected from ${sp.email} to ${email})` : ""}.`,
+    internal: true,
+  });
+  await audit({
+    actorType: "staff",
+    action: "sponsor.request_resent",
+    entityType: "application_sponsor",
+    entityId: sp.id,
+    staffUserId: staff.id,
+    ip: await clientIp(),
+    details: changed ? { from: sp.email, to: email } : undefined,
+  });
+  revalidatePath(`/staff/applications/${app.id}`);
+  return { message: `Request sent to ${email}.` };
+}
+
+/** Staff record the sponsor's answer after speaking to them (phone, in person or on paper). */
+export async function recordSponsorAnswer(sponsorId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const staff = await requireStaffAction("reviewer", "compliance_officer", "administrator");
+  const method = str(fd, "method");
+  const answer = str(fd, "answer");
+  const note = str(fd, "note");
+  if (!["phone", "in_person", "paper"].includes(method)) return { error: "Choose how the sponsor confirmed.", values: { note } };
+  if (answer !== "confirm" && answer !== "decline") return { error: "Choose confirmed or declined.", values: { note } };
+  if (note.length < 3) return { error: "Add a short note, e.g. who you spoke to and when.", values: { note } };
+  const found = await loadSponsor(sponsorId);
+  if (!found || !SPONSOR_OPEN_STATUSES.includes(found.app.status)) return { error: "This sponsor can no longer be updated from here." };
+  const { sp, app } = found;
+  if (sp.confirmedAt) return { error: "This sponsor has already confirmed." };
+
+  const now = new Date();
+  const db = getDb();
+  await db
+    .update(schema.applicationSponsors)
+    .set({
+      ...(answer === "confirm" ? { confirmedAt: now, declinedAt: null } : { declinedAt: now }),
+      confirmationMethod: method,
+      confirmedByStaffId: staff.id,
+      confirmationNote: note,
+      confirmTokenHash: null, // the emailed link no longer applies
+    })
+    .where(eq(schema.applicationSponsors.id, sp.id));
+  const how = { phone: "by phone", in_person: "in person", paper: "on paper" }[method];
+  await db.insert(schema.applicationEvents).values({
+    applicationId: app.id,
+    actorType: "staff",
+    staffUserId: staff.id,
+    eventType: answer === "confirm" ? "sponsor_confirmed" : "sponsor_declined",
+    subject: "Parrainage",
+    comment: `${sp.firstNames} ${sp.lastName} ${answer === "confirm" ? "confirmed" : "declined"} ${how}, recorded by ${staff.displayName}: ${note}`,
+    internal: true,
+  });
+  await audit({
+    actorType: "staff",
+    action: answer === "confirm" ? "sponsor.confirmed_by_staff" : "sponsor.declined_by_staff",
+    entityType: "application_sponsor",
+    entityId: sp.id,
+    staffUserId: staff.id,
+    ip: await clientIp(),
+    details: { method, note },
+  });
+  revalidatePath(`/staff/applications/${app.id}`);
+  return { message: answer === "confirm" ? "Sponsorship recorded as confirmed." : "Sponsorship recorded as declined." };
 }
