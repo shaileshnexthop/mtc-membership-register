@@ -102,6 +102,13 @@ export const paymentPurpose = pgEnum("payment_purpose", [
   "upgrade_adjustment",
 ]);
 
+export const paymentMethod = pgEnum("payment_method", [
+  "mips", // online card / mobile payment
+  "bank_transfer",
+  "cash",
+  "cheque",
+]);
+
 export const paymentStatus = pgEnum("payment_status", [
   "pending",
   "paid",
@@ -566,7 +573,10 @@ export const upgradeRequests = pgTable(
 /* Payments                                                             */
 /* ------------------------------------------------------------------ */
 
-/** MIPS payments. No card data is ever stored (security requirement). */
+/**
+ * Payments: online through MIPS, or recorded by Finance (bank transfer, cash,
+ * cheque). No card data is ever stored (security requirement).
+ */
 export const payments = pgTable(
   "payments",
   {
@@ -579,7 +589,10 @@ export const payments = pgTable(
     amountCents: integer("amount_cents").notNull(),
     currency: text("currency").notNull().default("MUR"),
     status: paymentStatus("status").notNull().default("pending"),
-    mipsOrderId: text("mips_order_id").notNull(),
+    method: paymentMethod("method").notNull().default("mips"),
+    reference: text("reference"), // bank or receipt reference for recorded payments
+    recordedById: uuid("recorded_by_id").references(() => staffUsers.id),
+    mipsOrderId: text("mips_order_id"),
     mipsReference: text("mips_reference"),
     failureReason: text("failure_reason"),
     callbackVerifiedAt: ts("callback_verified_at"),

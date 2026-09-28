@@ -111,19 +111,55 @@ export function applicationApprovedEmail(p: {
   feeLabel: string;
   dueLabel: string;
   conditions: string | null;
+  bankName: string;
+  accountNumber: string;
   link: string;
 }) {
   const subject = `Candidature ${p.reference} approuvée – Mauritius Turf Club`;
+  const row = (k: string, v: string) =>
+    `<tr><td style="padding:6px 12px 6px 0;color:#5b606b;white-space:nowrap">${esc(k)}</td><td style="padding:6px 0;font-weight:bold">${esc(v)}</td></tr>`;
   const html = layout(
     "Votre candidature a été approuvée",
     `<p>Bonjour ${esc(p.name)},</p>
 <p>Nous avons le plaisir de vous informer que votre candidature <strong>${esc(p.reference)}</strong> en qualité de <strong>${esc(p.typeName)}</strong> a été approuvée.</p>
-<p><strong>Cotisation :</strong> ${esc(p.feeLabel)}</p>
 ${p.conditions ? `<p><strong>Conditions d’adhésion :</strong><br>${esc(p.conditions).replace(/\n/g, "<br>")}</p>` : ""}
-<p>Votre adhésion prendra effet dès réception de votre paiement, à effectuer au plus tard le <strong>${esc(p.dueLabel)}</strong> (5 jours ouvrables). Passé ce délai, votre candidature sera automatiquement différée.</p>
-${button(p.link, "Régler ma cotisation")}`,
+<p>Votre adhésion prendra effet dès réception de votre paiement par virement bancaire, au plus tard le <strong>${esc(p.dueLabel)}</strong> (5 jours ouvrables). Passé ce délai, votre candidature sera automatiquement différée.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;padding:14px 16px;background:#eef1f8;border-radius:6px;font-size:15px">
+${row("Institution bancaire", p.bankName)}
+${row("Numéro de compte", p.accountNumber)}
+${row("Montant", p.feeLabel)}
+${row("Référence à indiquer", p.reference)}
+</table>
+<p style="font-size:13px;color:#5b606b">Merci d’indiquer la référence ${esc(p.reference)} sur votre virement afin que le Club puisse l’identifier.</p>
+${button(p.link, "Voir ma candidature")}`,
   );
-  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\nCotisation : ${p.feeLabel}\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}Paiement à effectuer au plus tard le ${p.dueLabel} : ${p.link}`;
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}\nMerci de régler votre cotisation par virement bancaire au plus tard le ${p.dueLabel} :\nInstitution bancaire : ${p.bankName}\nNuméro de compte : ${p.accountNumber}\nMontant : ${p.feeLabel}\nRéférence à indiquer : ${p.reference}\n\nVoir ma candidature : ${p.link}`;
+  return { subject, html, text };
+}
+
+export function welcomeMemberEmail(p: {
+  name: string;
+  memberNumber: string;
+  typeName: string;
+  amountLabel: string;
+  paidOn: string;
+  reference: string;
+  link: string;
+}) {
+  const subject = `Bienvenue au Mauritius Turf Club – membre ${p.memberNumber}`;
+  const html = layout(
+    "Bienvenue parmi les membres du Club",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Nous avons bien reçu votre paiement. Vous êtes désormais <strong>${esc(p.typeName)}</strong> du Mauritius Turf Club.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;padding:14px 16px;background:#eef1f8;border-radius:6px;font-size:15px">
+<tr><td style="padding:6px 12px 6px 0;color:#5b606b">Numéro de membre</td><td style="padding:6px 0;font-weight:bold">${esc(p.memberNumber)}</td></tr>
+<tr><td style="padding:6px 12px 6px 0;color:#5b606b">Paiement reçu</td><td style="padding:6px 0;font-weight:bold">${esc(p.amountLabel)} le ${esc(p.paidOn)}</td></tr>
+<tr><td style="padding:6px 12px 6px 0;color:#5b606b">Référence</td><td style="padding:6px 0;font-weight:bold">${esc(p.reference)}</td></tr>
+</table>
+<p>Ce courriel vaut reçu de paiement.</p>
+${button(p.link, "Accéder à mon espace membre")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nNous avons bien reçu votre paiement de ${p.amountLabel} le ${p.paidOn} (référence ${p.reference}).\nVous êtes désormais ${p.typeName} du Mauritius Turf Club, numéro de membre ${p.memberNumber}.\nCe courriel vaut reçu de paiement.\n\nVotre espace membre : ${p.link}`;
   return { subject, html, text };
 }
 

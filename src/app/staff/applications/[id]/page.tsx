@@ -4,7 +4,9 @@ import { notFound } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { StaffShell } from "@/components/StaffShell";
-import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm } from "@/components/ReviewForms";
+import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm } from "@/components/ReviewForms";
+import { getBankDetails } from "@/lib/settings";
+import { muDate } from "@/lib/business-days";
 import { hasRole, requireStaffPage } from "@/lib/staff";
 import { DOCUMENT_REQUIREMENTS, monthsSince } from "@/lib/applications";
 import { formatDateEn, formatDateTimeEn, formatSizeEn } from "@/lib/format";
@@ -45,6 +47,17 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
     db.select().from(schema.applicationEvents).where(eq(schema.applicationEvents.applicationId, id)).orderBy(desc(schema.applicationEvents.at)),
     db.select({ id: schema.staffUsers.id, name: schema.staffUsers.displayName }).from(schema.staffUsers),
   ]);
+  const bank = await getBankDetails();
+  const [member] = await db
+    .select({ id: schema.members.id, memberNumber: schema.members.memberNumber })
+    .from(schema.members)
+    .where(eq(schema.members.applicationId, id))
+    .limit(1);
+  const [joining] = await db
+    .select()
+    .from(schema.payments)
+    .where(and(eq(schema.payments.applicationId, id), eq(schema.payments.purpose, "joining")))
+    .limit(1);
   const staffName = (sid: string | null) => staffList.find((x) => x.id === sid)?.name ?? "";
 
   const inReview = app.status === "submitted";
@@ -294,6 +307,44 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
               </p>
             )}
           </section>
+
+          {app.status === "approved" || app.status === "admitted" ? (
+            <section className={s.card} aria-labelledby="h-payment">
+              <div className={s.cardHead}>
+                <h2 id="h-payment" className={s.cardTitle}>
+                  Joining payment
+                </h2>
+                <span className={`${s.pill} ${app.status === "admitted" ? s.pillOk : s.pillWarn}`}>
+                  {app.status === "admitted" ? "Paid" : "Awaiting payment"}
+                </span>
+              </div>
+              {app.status === "admitted" && joining ? (
+                <p className={s.note} style={{ margin: 0 }}>
+                  Rs {(joining.amountCents / 100).toFixed(2)} received {formatDateEn(joining.paidAt)} by{" "}
+                  {joining.method.replace("_", " ")}
+                  {joining.reference ? `, ref. ${joining.reference}` : ""}, recorded by {staffName(joining.recordedById)}.
+                  {member ? ` Member no. ${member.memberNumber}.` : ""}
+                </p>
+              ) : (
+                <>
+                  <p className={s.note} style={{ margin: 0 }}>
+                    Due by {formatDateEn(app.paymentDueAt)}. The applicant was asked to transfer to {bank.bankName},
+                    account {bank.accountNumber}, quoting <strong>{app.reference}</strong>.
+                  </p>
+                  {hasRole(staff, "finance") ? (
+                    <PaymentForm
+                      applicationId={app.id}
+                      suggestedAmount={type && type.feeCents > 0 ? (type.feeCents / 100).toFixed(2) : ""}
+                      today={muDate(new Date())}
+                      reference={app.reference}
+                    />
+                  ) : (
+                    <p className={s.note}>Finance records the payment when it is received.</p>
+                  )}
+                </>
+              )}
+            </section>
+          ) : null}
 
           <section className={s.card} aria-labelledby="h-log">
             <h2 id="h-log" className={s.cardTitle}>

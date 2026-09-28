@@ -346,3 +346,31 @@
   border-radius: var(--radius);
   font-size: 15px;
 }
+
+.bankBox {
+  margin: 0;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 20px;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  background: var(--navy-tint);
+  font-size: 15px;
+}
+.bankBox dt {
+  color: var(--muted);
+}
+.bankBox dd {
+  margin: 0;
+  font-weight: 700;
+  color: var(--mtc-navy-dark);
+}
+@media (max-width: 480px) {
+  .bankBox {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .bankBox dd {
+    margin-bottom: 8px;
+  }
+}

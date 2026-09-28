@@ -7,6 +7,7 @@ import {
   recordCompliance,
   reviewDocument,
 } from "@/app/actions/review";
+import { recordJoiningPayment } from "@/app/actions/payments";
 import type { FormState } from "@/app/actions/auth";
 import ui from "./ui.module.css";
 import s from "./staff.module.css";
@@ -187,6 +188,60 @@ export function ObservationForm({ applicationId }: { applicationId: string }) {
       </div>
       <button type="submit" className={s.btn} disabled={pending} style={{ alignSelf: "flex-start" }}>
         Add observation
+      </button>
+    </form>
+  );
+}
+
+export function PaymentForm({
+  applicationId,
+  suggestedAmount,
+  today,
+  reference,
+}: {
+  applicationId: string;
+  suggestedAmount: string;
+  today: string;
+  reference: string;
+}) {
+  const [state, action, pending] = useActionState(recordJoiningPayment.bind(null, applicationId), {});
+  if (state.message) return <Feedback state={state} />;
+  const fe = state.fieldErrors ?? {};
+  const v = state.values ?? {};
+  const field = (name: string, label: string, input: React.ReactNode) => (
+    <div className={ui.field}>
+      <label htmlFor={`pay-${name}`} className={ui.label}>
+        {label}
+      </label>
+      {input}
+      {fe[name] ? <span className={ui.fieldError}>{fe[name]}</span> : null}
+    </div>
+  );
+  return (
+    <form action={action} className={ui.form} style={{ gap: 12 }}>
+      <Feedback state={state} />
+      {field(
+        "amount",
+        "Amount received (Rs)",
+        <input id="pay-amount" name="amount" type="text" inputMode="decimal" defaultValue={v.amount ?? suggestedAmount} placeholder="e.g. 1500.00" />,
+      )}
+      {field("paidOn", "Date received", <input id="pay-paidOn" name="paidOn" type="date" defaultValue={v.paidOn ?? today} max={today} />)}
+      {field(
+        "method",
+        "Paid by",
+        <select id="pay-method" name="method" defaultValue={v.method ?? "bank_transfer"}>
+          <option value="bank_transfer">Bank transfer</option>
+          <option value="cash">Cash</option>
+          <option value="cheque">Cheque</option>
+        </select>,
+      )}
+      {field(
+        "reference",
+        "Bank or receipt reference",
+        <input id="pay-reference" name="reference" type="text" defaultValue={v.reference ?? ""} placeholder={`Transfer should quote ${reference}`} />,
+      )}
+      <button type="submit" className={s.btnPrimary} disabled={pending}>
+        {pending ? "Recording…" : "Record payment and admit member"}
       </button>
     </form>
   );

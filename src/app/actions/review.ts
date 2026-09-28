@@ -11,6 +11,7 @@ import { appBaseUrl } from "@/lib/config";
 import { addBusinessDays } from "@/lib/business-days";
 import { formatDateFr, formatMur } from "@/lib/format";
 import { DOCUMENT_REQUIREMENTS } from "@/lib/applications";
+import { getBankDetails } from "@/lib/settings";
 import {
   applicationApprovedEmail,
   applicationDeferredEmail,
@@ -204,6 +205,7 @@ export async function decideApplication(applicationId: string, _prev: FormState,
       feeLabel: type && type.feeCents > 0 ? `${formatMur(type.feeCents)} ${type.feePeriod === "monthly" ? "par mois" : "par an"}` : "[montant à confirmer]",
       dueLabel: formatDateFr(paymentDueAt),
       conditions: type?.conditionsText ?? null,
+      ...(await getBankDetails()),
       link,
     });
   } else if (decision === "defer") {

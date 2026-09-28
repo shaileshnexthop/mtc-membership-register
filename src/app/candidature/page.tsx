@@ -14,7 +14,8 @@ import {
   isEditable,
   STATUS_LABELS_FR,
 } from "@/lib/applications";
-import { formatDateFr, formatDateTimeFr } from "@/lib/format";
+import { formatDateFr, formatDateTimeFr, formatMur } from "@/lib/format";
+import { getBankDetails } from "@/lib/settings";
 import ui from "@/components/ui.module.css";
 import s from "@/components/application.module.css";
 
@@ -70,6 +71,18 @@ export default async function ApplicationOverview({
       .orderBy(desc(schema.applicationEvents.at)),
   ]);
   const editable = isEditable(app.status);
+  const bank = app.status === "approved" ? await getBankDetails() : null;
+  const [type] = app.membershipTypeId
+    ? await getDb().select().from(schema.membershipTypes).where(eq(schema.membershipTypes.id, app.membershipTypeId)).limit(1)
+    : [];
+  const [member] =
+    app.status === "admitted"
+      ? await getDb()
+          .select({ memberNumber: schema.members.memberNumber, memberSince: schema.members.memberSince })
+          .from(schema.members)
+          .where(eq(schema.members.applicationId, app.id))
+          .limit(1)
+      : [];
   const steps = [
     { href: "/candidature/informations", label: "1. Informations personnelles", missing: completeness.personal },
     { href: "/candidature/parrainage", label: "2. Parrainage", missing: completeness.sponsors },
@@ -100,6 +113,42 @@ export default async function ApplicationOverview({
           {(app.status === "deferred" || app.status === "rejected") && app.decisionComment ? (
             <div className={app.status === "rejected" ? ui.alertError : ui.alertInfo} style={{ marginTop: 16 }}>
               <strong>Commentaire du Club :</strong> {app.decisionComment}
+            </div>
+          ) : null}
+
+          {bank ? (
+            <div style={{ marginTop: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <h2 className={s.sectionTitle} style={{ margin: 0 }}>Régler ma cotisation</h2>
+              <p style={{ margin: 0 }}>
+                Votre candidature a été approuvée. Votre adhésion prendra effet dès réception de votre
+                paiement par virement bancaire, au plus tard le{" "}
+                <strong>{formatDateFr(app.paymentDueAt)}</strong>.
+              </p>
+              <dl className={s.bankBox}>
+                <dt>Institution bancaire</dt>
+                <dd>{bank.bankName}</dd>
+                <dt>Numéro de compte</dt>
+                <dd>{bank.accountNumber}</dd>
+                <dt>Montant</dt>
+                <dd>
+                  {type && type.feeCents > 0
+                    ? `${formatMur(type.feeCents)} ${type.feePeriod === "monthly" ? "par mois" : "par an"}`
+                    : "[montant à confirmer]"}
+                </dd>
+                <dt>Référence à indiquer</dt>
+                <dd>{app.reference}</dd>
+              </dl>
+              <p className={s.small} style={{ margin: 0 }}>
+                Indiquez la référence {app.reference} sur votre virement. Vous recevrez un reçu par
+                courriel dès que le Club aura enregistré votre paiement.
+              </p>
+            </div>
+          ) : null}
+
+          {member ? (
+            <div className={ui.alertOk} style={{ marginTop: 20 }}>
+              Bienvenue ! Vous êtes membre du Mauritius Turf Club depuis le {formatDateFr(member.memberSince)}.
+              Votre numéro de membre : <strong>{member.memberNumber}</strong>.
             </div>
           ) : null}
 
