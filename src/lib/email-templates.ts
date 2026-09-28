@@ -103,3 +103,53 @@ ${button(link, "Répondre à la demande")}
   const text = `Bonjour ${sponsorName},\n\n${applicantName} a déposé une candidature (${reference}) pour devenir Membre du Mauritius Turf Club et vous a indiqué(e) comme parrain.\nMerci de confirmer ou de décliner ce parrainage : ${link}`;
   return { subject, html, text };
 }
+
+export function applicationApprovedEmail(p: {
+  name: string;
+  reference: string;
+  typeName: string;
+  feeLabel: string;
+  dueLabel: string;
+  conditions: string | null;
+  link: string;
+}) {
+  const subject = `Candidature ${p.reference} approuvée – Mauritius Turf Club`;
+  const html = layout(
+    "Votre candidature a été approuvée",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Nous avons le plaisir de vous informer que votre candidature <strong>${esc(p.reference)}</strong> en qualité de <strong>${esc(p.typeName)}</strong> a été approuvée.</p>
+<p><strong>Cotisation :</strong> ${esc(p.feeLabel)}</p>
+${p.conditions ? `<p><strong>Conditions d’adhésion :</strong><br>${esc(p.conditions).replace(/\n/g, "<br>")}</p>` : ""}
+<p>Votre adhésion prendra effet dès réception de votre paiement, à effectuer au plus tard le <strong>${esc(p.dueLabel)}</strong> (5 jours ouvrables). Passé ce délai, votre candidature sera automatiquement différée.</p>
+${button(p.link, "Régler ma cotisation")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\nCotisation : ${p.feeLabel}\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}Paiement à effectuer au plus tard le ${p.dueLabel} : ${p.link}`;
+  return { subject, html, text };
+}
+
+export function applicationDeferredEmail(name: string, reference: string, comment: string, link: string, automatic = false) {
+  const subject = `Candidature ${reference} différée – Mauritius Turf Club`;
+  const html = layout(
+    "Votre candidature a été différée",
+    `<p>Bonjour ${esc(name)},</p>
+<p>Votre candidature <strong>${esc(reference)}</strong> a été différée${automatic ? "" : " par le Club"}.</p>
+<p><strong>Motif :</strong><br>${esc(comment).replace(/\n/g, "<br>")}</p>
+<p>Vous pouvez modifier votre dossier et le soumettre à nouveau depuis votre espace.</p>
+${button(link, "Modifier ma candidature")}`,
+  );
+  const text = `Bonjour ${name},\n\nVotre candidature ${reference} a été différée.\nMotif : ${comment}\n\nModifier votre candidature : ${link}`;
+  return { subject, html, text };
+}
+
+export function applicationRejectedEmail(name: string, reference: string, comment: string) {
+  const subject = `Candidature ${reference} – décision du Mauritius Turf Club`;
+  const html = layout(
+    "Décision concernant votre candidature",
+    `<p>Bonjour ${esc(name)},</p>
+<p>Après examen, le Club n’est pas en mesure de donner une suite favorable à votre candidature <strong>${esc(reference)}</strong>.</p>
+<p><strong>Commentaire :</strong><br>${esc(comment).replace(/\n/g, "<br>")}</p>
+<p>Conformément aux Statuts du Club, cette décision relève de l’appréciation discrétionnaire des Administrateurs.</p>`,
+  );
+  const text = `Bonjour ${name},\n\nLe Club n’est pas en mesure de donner une suite favorable à votre candidature ${reference}.\nCommentaire : ${comment}`;
+  return { subject, html, text };
+}
