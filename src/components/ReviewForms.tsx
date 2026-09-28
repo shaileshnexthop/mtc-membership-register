@@ -5,6 +5,7 @@ import {
   addObservation,
   decideApplication,
   recordCompliance,
+  reopenApplication,
   reviewDocument,
 } from "@/app/actions/review";
 import { recordJoiningPayment } from "@/app/actions/payments";
@@ -243,6 +244,50 @@ export function PaymentForm({
       <button type="submit" className={s.btnPrimary} disabled={pending}>
         {pending ? "Recording…" : "Record payment and admit member"}
       </button>
+    </form>
+  );
+}
+
+export function ReopenForm({ applicationId }: { applicationId: string }) {
+  const [state, action, pending] = useActionState(reopenApplication.bind(null, applicationId), {});
+  const [open, setOpen] = useState(false);
+  if (state.message) return <Feedback state={state} />;
+  if (!open)
+    return (
+      <button type="button" className={s.btn} onClick={() => setOpen(true)} style={{ alignSelf: "flex-start" }}>
+        Reopen application (Administrator)
+      </button>
+    );
+  return (
+    <form action={action} className={ui.form} style={{ gap: 12 }}>
+      <Feedback state={state} />
+      <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+        <legend className={ui.label} style={{ marginBottom: 6 }}>
+          Reopen to
+        </legend>
+        <label className={s.note} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <input type="radio" name="mode" value="review" /> Back to review — the rejection was a mistake; staff review
+          it again.
+        </label>
+        <label className={s.note} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+          <input type="radio" name="mode" value="edit" /> Back to the applicant — they may correct and resubmit. They
+          are emailed the reason.
+        </label>
+      </fieldset>
+      <div className={ui.field}>
+        <label htmlFor="reopen-reason" className={ui.label}>
+          Reason <span className={ui.hint}>(required, kept in the history)</span>
+        </label>
+        <textarea id="reopen-reason" name="reason" rows={2} defaultValue={state.values?.reason ?? ""} />
+      </div>
+      <div className={s.rowActions}>
+        <button type="submit" className={s.btnPrimary} disabled={pending}>
+          {pending ? "Reopening…" : "Reopen"}
+        </button>
+        <button type="button" className={s.btn} onClick={() => setOpen(false)}>
+          Cancel
+        </button>
+      </div>
     </form>
   );
 }

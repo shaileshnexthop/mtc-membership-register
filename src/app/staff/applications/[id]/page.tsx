@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { StaffShell } from "@/components/StaffShell";
-import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm } from "@/components/ReviewForms";
+import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm, ReopenForm } from "@/components/ReviewForms";
 import { getBankDetails } from "@/lib/settings";
 import { muDate } from "@/lib/business-days";
 import { hasRole, requireStaffPage } from "@/lib/staff";
@@ -297,6 +297,7 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                 <p className={s.note}>A Reviewer records the decision.</p>
               )
             ) : (
+              <>
               <p
                 className={app.status === "approved" || app.status === "admitted" ? ui.alertOk : app.status === "draft" ? s.note : ui.alertInfo}
                 style={{ margin: 0 }}
@@ -305,6 +306,8 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                   ? "The applicant has not submitted this application yet."
                   : `${STATUS_EN[app.status][0]}${app.decidedAt ? ` by ${staffName(app.decidedById)}, ${formatDateTimeEn(app.decidedAt)}` : ""}${app.decisionComment ? ` — “${app.decisionComment}”` : ""}${app.status === "approved" && app.paymentDueAt ? `. Payment due by ${formatDateEn(app.paymentDueAt)}.` : ""}`}
               </p>
+              {app.status === "rejected" && hasRole(staff, "administrator") ? <ReopenForm applicationId={app.id} /> : null}
+              </>
             )}
           </section>
 

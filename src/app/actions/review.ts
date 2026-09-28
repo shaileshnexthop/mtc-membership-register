@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireStaffAction } from "@/lib/staff";
 import { audit } from "@/lib/audit";
@@ -247,4 +247,84 @@ export async function addObservation(applicationId: string, _prev: FormState, fd
   });
   revalidatePath(`/staff/applications/${applicationId}`);
   return { message: "Observation added." };
+}
+
+/* ------------------------------------------------------------------ */
+/* Administrator override: reopen a rejected application               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * A rejection is final for reviewers and applicants. Only an Administrator can
+ * reopen one, with a recorded reason: either back to review (e.g. rejected by
+ * mistake) or back to the applicant to edit and resubmit (as if deferred).
+ */
+export async function reopenApplication(applicationId: string, _prev: FormState, fd: FormData): Promise<FormState> {
+  const staff = await requireStaffAction("administrator");
+  const mode = str(fd, "mode");
+  const reason = str(fd, "reason");
+  if (mode !== "review" && mode !== "edit") return { error: "Choose how to reopen the application.", values: { reason } };
+  if (reason.length < 5) return { error: "Give the reason for reopening. It is kept in the history.", values: { reason } };
+
+  const app = await loadApp(applicationId);
+  if (!app || app.status !== "rejected") return { error: "Only a rejected application can be reopened." };
+
+  const db = getDb();
+  const [otherOpen] = await db
+    .select({ reference: schema.applications.reference })
+    .from(schema.applications)
+    .where(
+      and(
+        eq(schema.applications.accountId, app.accountId),
+        inArray(schema.applications.status, ["draft", "submitted", "deferred", "approved"]),
+      ),
+    )
+    .limit(1);
+  if (otherOpen) return { error: `This applicant already has an open application (${otherOpen.reference}).` };
+
+  const toStatus = mode === "review" ? "submitted" : "deferred";
+  const now = new Date();
+  await db
+    .update(schema.applications)
+    .set({
+      status: toStatus,
+      decisionComment: mode === "edit" ? reason : app.decisionComment,
+      updatedAt: now,
+    })
+    .where(and(eq(schema.applications.id, app.id), eq(schema.applications.status, "rejected")));
+  await db.insert(schema.applicationEvents).values({
+    applicationId: app.id,
+    actorType: "staff",
+    staffUserId: staff.id,
+    eventType: "reopened",
+    subject: mode === "review" ? "Rejection overridden – back to review" : "Rejection overridden – returned to applicant",
+    comment: `By ${staff.displayName} (Administrator): ${reason}`,
+    internal: mode === "review",
+    fromStatus: "rejected",
+    toStatus,
+  });
+  await audit({
+    actorType: "staff",
+    action: "application.reopened",
+    entityType: "application",
+    entityId: app.id,
+    staffUserId: staff.id,
+    ip: await clientIp(),
+    details: { mode, reason },
+  });
+
+  if (mode === "edit") {
+    const acc = await applicantContact(app.accountId);
+    const name = `${app.firstNames ?? ""} ${app.lastName ?? ""}`.trim() || acc.fullName;
+    const mail = applicationDeferredEmail(name, app.reference, reason, `${appBaseUrl()}/candidature`);
+    await sendEmail({ to: acc.email, templateKey: "application_reopened", applicationId: app.id, staffUserId: staff.id, ...mail });
+  }
+
+  revalidatePath(`/staff/applications/${app.id}`);
+  revalidatePath("/staff/applications");
+  return {
+    message:
+      mode === "review"
+        ? "Reopened and back in the review queue."
+        : "Reopened. The applicant has been emailed the reason and can edit and resubmit.",
+  };
 }
