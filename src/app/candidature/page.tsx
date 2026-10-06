@@ -121,9 +121,14 @@ export default async function ApplicationOverview({
               <h2 className={s.sectionTitle} style={{ margin: 0 }}>Régler ma cotisation</h2>
               <p style={{ margin: 0 }}>
                 Votre candidature a été approuvée. Votre adhésion prendra effet dès réception de votre
-                paiement par virement bancaire, au plus tard le{" "}
-                <strong>{formatDateFr(app.paymentDueAt)}</strong>.
+                paiement, au plus tard le <strong>{formatDateFr(app.paymentDueAt)}</strong>.
               </p>
+              <p style={{ margin: 0 }}>
+                <Link href="/candidature/paiement" className={ui.primary}>
+                  Payer en ligne
+                </Link>
+              </p>
+              <p className={s.small} style={{ margin: 0 }}>Ou par virement bancaire :</p>
               <dl className={s.bankBox}>
                 <dt>Institution bancaire</dt>
                 <dd>{bank.bankName}</dd>

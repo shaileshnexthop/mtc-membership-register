@@ -110,10 +110,12 @@ export function applicationApprovedEmail(p: {
   typeName: string;
   feeLabel: string;
   dueLabel: string;
+  deadlineDays: number;
   conditions: string | null;
   bankName: string;
   accountNumber: string;
   link: string;
+  payLink: string | null;
 }) {
   const subject = `Candidature ${p.reference} approuvée – Mauritius Turf Club`;
   const row = (k: string, v: string) =>
@@ -123,7 +125,8 @@ export function applicationApprovedEmail(p: {
     `<p>Bonjour ${esc(p.name)},</p>
 <p>Nous avons le plaisir de vous informer que votre candidature <strong>${esc(p.reference)}</strong> en qualité de <strong>${esc(p.typeName)}</strong> a été approuvée.</p>
 ${p.conditions ? `<p><strong>Conditions d’adhésion :</strong><br>${esc(p.conditions).replace(/\n/g, "<br>")}</p>` : ""}
-<p>Votre adhésion prendra effet dès réception de votre paiement par virement bancaire, au plus tard le <strong>${esc(p.dueLabel)}</strong> (5 jours ouvrables). Passé ce délai, votre candidature sera automatiquement différée.</p>
+<p>Votre adhésion prendra effet dès réception de votre paiement de <strong>${esc(p.feeLabel)}</strong>, au plus tard le <strong>${esc(p.dueLabel)}</strong> (${p.deadlineDays} jours ouvrables). Passé ce délai, votre candidature sera automatiquement différée.</p>
+${p.payLink ? `${button(p.payLink, "Payer en ligne")}<p style="font-size:13px;color:#5b606b;margin-top:0">Paiement sécurisé par carte bancaire via Peach Payments. Vous devrez vous connecter à votre compte.</p><p>Vous pouvez également régler par virement bancaire :</p>` : "<p>Merci de régler par virement bancaire :</p>"}
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;padding:14px 16px;background:#eef1f8;border-radius:6px;font-size:15px">
 ${row("Institution bancaire", p.bankName)}
 ${row("Numéro de compte", p.accountNumber)}
@@ -131,9 +134,9 @@ ${row("Montant", p.feeLabel)}
 ${row("Référence à indiquer", p.reference)}
 </table>
 <p style="font-size:13px;color:#5b606b">Merci d’indiquer la référence ${esc(p.reference)} sur votre virement afin que le Club puisse l’identifier.</p>
-${button(p.link, "Voir ma candidature")}`,
+${p.payLink ? "" : button(p.link, "Voir ma candidature")}`,
   );
-  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}\nMerci de régler votre cotisation par virement bancaire au plus tard le ${p.dueLabel} :\nInstitution bancaire : ${p.bankName}\nNuméro de compte : ${p.accountNumber}\nMontant : ${p.feeLabel}\nRéférence à indiquer : ${p.reference}\n\nVoir ma candidature : ${p.link}`;
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}\nMerci de régler votre cotisation de ${p.feeLabel} au plus tard le ${p.dueLabel} (${p.deadlineDays} jours ouvrables).\n${p.payLink ? `\nPayer en ligne par carte : ${p.payLink}\n\nOu par virement bancaire :` : "\nPar virement bancaire :"}\nInstitution bancaire : ${p.bankName}\nNuméro de compte : ${p.accountNumber}\nMontant : ${p.feeLabel}\nRéférence à indiquer : ${p.reference}\n\nVoir ma candidature : ${p.link}`;
   return { subject, html, text };
 }
 

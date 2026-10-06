@@ -25,8 +25,8 @@ const membershipTypes = [
 ];
 
 const settings: Record<string, unknown> = {
-  payment_deadline_business_days: 5,
-  payment_reminder_business_days: [3, 5],
+  payment_deadline_business_days: 3,
+  payment_reminder_business_days: [2, 3],
   sponsor_reminder_business_days: 3,
   upgrade_reminder_business_days: 3,
   renewal_reminder_days_before: [30, 14, 7, 0],

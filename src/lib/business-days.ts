@@ -26,3 +26,8 @@ export async function addBusinessDays(from: Date, n: number): Promise<Date> {
   // 23:59:59 local = 19:59:59 UTC
   return new Date(`${cursor.toISOString().slice(0, 10)}T19:59:59Z`);
 }
+
+/** True when the moment has passed. */
+export function isPast(d: Date | null | undefined): boolean {
+  return d ? d.getTime() < Date.now() : false;
+}

@@ -104,6 +104,7 @@ export const paymentPurpose = pgEnum("payment_purpose", [
 
 export const paymentMethod = pgEnum("payment_method", [
   "mips", // online card / mobile payment
+  "card", // online card payment through Peach Payments Hosted Checkout
   "bank_transfer",
   "cash",
   "cheque",
@@ -598,6 +599,9 @@ export const payments = pgTable(
     reference: text("reference"), // bank or receipt reference for recorded payments
     recordedById: uuid("recorded_by_id").references(() => staffUsers.id),
     mipsOrderId: text("mips_order_id"),
+    // Online card payments (Peach Payments): checkout and transaction identifiers.
+    gatewayCheckoutId: text("gateway_checkout_id"),
+    gatewayTransactionId: text("gateway_transaction_id"),
     mipsReference: text("mips_reference"),
     failureReason: text("failure_reason"),
     callbackVerifiedAt: ts("callback_verified_at"),
@@ -607,6 +611,7 @@ export const payments = pgTable(
   },
   (t) => [
     uniqueIndex("payments_mips_order_uq").on(t.mipsOrderId),
+    uniqueIndex("payments_gateway_checkout_uq").on(t.gatewayCheckoutId),
     index("payments_member_idx").on(t.memberId),
     index("payments_application_idx").on(t.applicationId),
     index("payments_status_idx").on(t.status),

@@ -276,7 +276,7 @@ export async function login(_prev: FormState, fd: FormData): Promise<FormState> 
     ip,
   });
   await createSession({ accountId: account.id });
-  redirect("/espace");
+  redirect(fd.get("suite") === "paiement" ? "/candidature/paiement" : "/espace");
 }
 
 export async function logout(): Promise<void> {

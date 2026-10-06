@@ -11,7 +11,8 @@ import { appBaseUrl } from "@/lib/config";
 import { addBusinessDays } from "@/lib/business-days";
 import { formatDateFr, formatMur } from "@/lib/format";
 import { DOCUMENT_REQUIREMENTS } from "@/lib/applications";
-import { getBankDetails } from "@/lib/settings";
+import { getBankDetails, getSettings } from "@/lib/settings";
+import { peachEnabled } from "@/lib/peach";
 import { randomToken, sha256 } from "@/lib/crypto";
 import {
   sponsorRequestEmail,
@@ -158,7 +159,8 @@ export async function decideApplication(applicationId: string, _prev: FormState,
   const db = getDb();
   const now = new Date();
   const toStatus = decision === "approve" ? "approved" : decision === "defer" ? "deferred" : "rejected";
-  const paymentDueAt = decision === "approve" ? await addBusinessDays(now, 5) : null;
+  const deadlineDays = Number((await getSettings(["payment_deadline_business_days"])).payment_deadline_business_days ?? 3) || 3;
+  const paymentDueAt = decision === "approve" ? await addBusinessDays(now, deadlineDays) : null;
 
   await db
     .update(schema.applications)
@@ -206,6 +208,8 @@ export async function decideApplication(applicationId: string, _prev: FormState,
       typeName: type?.name ?? "Membre",
       feeLabel: type && type.feeCents > 0 ? `${formatMur(type.feeCents)} ${type.feePeriod === "monthly" ? "par mois" : "par an"}` : "[montant à confirmer]",
       dueLabel: formatDateFr(paymentDueAt),
+      deadlineDays,
+      payLink: peachEnabled() && type && type.feeCents > 0 ? `${appBaseUrl()}/candidature/paiement` : null,
       conditions: type?.conditionsText ?? null,
       ...(await getBankDetails()),
       link,

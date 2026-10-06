@@ -12,8 +12,9 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  if (await getCurrentAccount()) redirect("/espace");
   const params = await searchParams;
+  const suite = params.suite === "paiement" ? "paiement" : undefined;
+  if (await getCurrentAccount()) redirect(suite ? "/candidature/paiement" : "/espace");
   return (
     <PublicShell>
       <div className={s.card}>
@@ -29,7 +30,12 @@ export default async function LoginPage({
             Vous êtes déconnecté(e).
           </p>
         ) : null}
-        <LoginForm />
+        {suite ? (
+          <p role="status" className={s.alertInfo}>
+            Connectez-vous pour régler votre cotisation.
+          </p>
+        ) : null}
+        <LoginForm suite={suite} />
       </div>
     </PublicShell>
   );

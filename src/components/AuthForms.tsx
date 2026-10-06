@@ -154,10 +154,11 @@ export function VerifyEmailForm({ token }: { token: string }) {
   );
 }
 
-export function LoginForm() {
+export function LoginForm({ suite }: { suite?: string }) {
   const [state, action, pending] = useActionState(login, initial);
   return (
     <form action={action} className={s.form} noValidate>
+      {suite ? <input type="hidden" name="suite" value={suite} /> : null}
       <Alerts state={state} />
       <Field id="email" label="Adresse courriel" type="email" autoComplete="email" state={state} />
       <Field id="password" label="Mot de passe" type="password" autoComplete="current-password" state={state} />

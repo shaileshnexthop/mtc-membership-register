@@ -142,3 +142,38 @@ Remove it again (before MTC's real register is loaded):
 ```
 sudo -u deploy docker compose --project-directory /opt/mtc run --rm migrate node seed-demo.cjs --remove
 ```
+
+## Card payments (Peach Payments Hosted Checkout)
+
+Approved applicants get a "Payer en ligne" link in the approval email and on their
+application page. Card payments are confirmed automatically: the server asks Peach for the
+checkout status with its own credentials; nothing the browser sends back is trusted, and
+no card details reach the portal. Without Peach keys, the portal offers bank transfer only.
+
+1. Sign up at Peach Payments; the sandbox Dashboard is at https://sandbox-dashboard.peachpayments.com
+2. In the sandbox Dashboard, under Checkout:
+   - copy the **Entity ID, Client ID, Client secret and Merchant ID**;
+   - add `crm.mauritiusturfclub.com` to the **allowlisted domains**;
+   - set the **webhook URL** to `https://crm.mauritiusturfclub.com/api/payments/peach/webhook`;
+   - optional: enable **webhook signing** and copy the signing secret;
+   - check that **MUR** is enabled for the entity.
+3. Add to `/opt/mtc/.env` (as the `ubuntu` user: `sudo -u deploy nano /opt/mtc/.env`):
+   ```
+   PEACH_MODE=test
+   PEACH_ENTITY_ID=...
+   PEACH_CLIENT_ID=...
+   PEACH_CLIENT_SECRET=...
+   PEACH_MERCHANT_ID=...
+   PEACH_WEBHOOK_SECRET=...
+   ```
+4. Restart the app so it reads the new values:
+   ```
+   sudo -u deploy docker compose --project-directory /opt/mtc up -d --force-recreate app
+   ```
+5. The card button only appears when the membership type has a fee. Until MTC confirms
+   its fees, set a demo fee (Rs 1,500.00 here):
+   ```
+   sudo -u deploy docker compose --project-directory /opt/mtc exec db psql -U mtc -d mtc -c "update membership_types set fee_cents = 150000 where code = 'ASSOCIE';"
+   ```
+
+Sandbox test card: Visa 4200 0000 0000 0091 (any future expiry, any 3-digit CVV).

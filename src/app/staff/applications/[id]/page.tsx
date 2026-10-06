@@ -53,11 +53,13 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
     .from(schema.members)
     .where(eq(schema.members.applicationId, id))
     .limit(1);
-  const [joining] = await db
+  const joiningPayments = await db
     .select()
     .from(schema.payments)
     .where(and(eq(schema.payments.applicationId, id), eq(schema.payments.purpose, "joining")))
-    .limit(1);
+    .orderBy(desc(schema.payments.createdAt));
+  const joining = joiningPayments.find((p) => p.status === "paid");
+  const cardAttempts = joiningPayments.filter((p) => p.method === "card");
   const staffName = (sid: string | null) => staffList.find((x) => x.id === sid)?.name ?? "";
 
   const inReview = app.status === "submitted";
@@ -338,14 +340,16 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                 <p className={s.note} style={{ margin: 0 }}>
                   Rs {(joining.amountCents / 100).toFixed(2)} received {formatDateEn(joining.paidAt)} by{" "}
                   {joining.method.replace("_", " ")}
-                  {joining.reference ? `, ref. ${joining.reference}` : ""}, recorded by {staffName(joining.recordedById)}.
+                  {joining.reference ? `, ref. ${joining.reference}` : ""}
+                  {joining.method === "card" ? ", confirmed with Peach Payments" : `, recorded by ${staffName(joining.recordedById)}`}.
                   {member ? ` Member no. ${member.memberNumber}.` : ""}
                 </p>
               ) : (
                 <>
                   <p className={s.note} style={{ margin: 0 }}>
-                    Due by {formatDateEn(app.paymentDueAt)}. The applicant was asked to transfer to {bank.bankName},
-                    account {bank.accountNumber}, quoting <strong>{app.reference}</strong>.
+                    Due by {formatDateEn(app.paymentDueAt)}. The applicant can pay by card online (confirmed
+                    automatically) or transfer to {bank.bankName}, account {bank.accountNumber}, quoting{" "}
+                    <strong>{app.reference}</strong>. Record a transfer, cash or cheque here.
                   </p>
                   {hasRole(staff, "finance") ? (
                     <PaymentForm
@@ -359,6 +363,31 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                   )}
                 </>
               )}
+            </section>
+          ) : null}
+
+          {cardAttempts.length ? (
+            <section className={s.card} aria-labelledby="h-card">
+              <h2 id="h-card" className={s.cardTitle}>
+                Online card payments <span className={s.note}>· Peach Payments</span>
+              </h2>
+              <ul className={s.log}>
+                {cardAttempts.map((p) => (
+                  <li key={p.id}>
+                    <span className={s.logHead}>
+                      {formatDateTimeEn(p.createdAt)} · Rs {(p.amountCents / 100).toFixed(2)} ·{" "}
+                      <span className={`${s.pill} ${p.status === "paid" ? s.pillOk : p.status === "pending" ? s.pillInfo : s.pillBad}`}>
+                        {p.status === "pending" ? "Started, not completed" : p.status === "paid" ? "Paid" : "Failed"}
+                      </span>
+                    </span>
+                    <span className={s.note}>
+                      Ref. {p.reference}
+                      {p.gatewayTransactionId ? ` · Peach transaction ${p.gatewayTransactionId}` : ""}
+                      {p.failureReason ? ` · ${p.failureReason}` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
             </section>
           ) : null}
 
