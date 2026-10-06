@@ -7,7 +7,7 @@ export default function Home() {
     <div className={styles.page}>
       <SiteHeader />
       <main className={styles.main}>
-        <h1>Devenir membre du Mauritius Turf Club</h1>
+        <h1>Portail membre du Mauritius Turf Club</h1>
         <p>
           Créez votre compte, vérifiez votre adresse courriel, puis déposez votre
           candidature en ligne avec les documents requis.

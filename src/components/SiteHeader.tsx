@@ -6,7 +6,7 @@ import s from "./SiteHeader.module.css";
 export function SiteHeader({ children }: { children?: React.ReactNode }) {
   return (
     <header className={s.header}>
-      <Link href="/" className={s.brand} aria-label="MTC Jockey Club – Portail des membres, accueil">
+      <Link href="/" className={s.brand} aria-label="MTC Jockey Club – accueil">
         <Image
           src="/mtcjc-logo.png"
           alt="MTC Jockey Club"
@@ -16,13 +16,7 @@ export function SiteHeader({ children }: { children?: React.ReactNode }) {
           unoptimized
           className={s.logo}
         />
-        <span className={s.sub}>
-          <span>Portail des membres</span>
-          <span className={s.dot} aria-hidden="true">
-            {" · "}
-          </span>
-          <span className={s.place}>Champ de Mars, Port Louis</span>
-        </span>
+        <span className={s.sub}>Champ de Mars, Port Louis</span>
       </Link>
       {children ? <div className={s.right}>{children}</div> : null}
     </header>
