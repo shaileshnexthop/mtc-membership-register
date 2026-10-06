@@ -12,17 +12,13 @@ import { Pool, type PoolClient } from "pg";
 
 const DOMAIN = "demo.invalid";
 
-const SURNAMES = [
-  "Ramdenee", "Lagesse", "Jugnauth", "Desvaux", "Appadoo", "Li Kwong Ken", "Rivalland", "Seegoolam",
-  "Ah-Chuen", "Koenig", "Bhugeloo", "Maurel", "Ramsamy", "Hardy", "Toolsee", "Leclézio",
-  "Dookhun", "Espitalier", "Moonien", "Chan Low", "Gujadhur", "de Chazal", "Boodhoo", "Pitot",
-  "Ramgoolam", "Noël", "Soobratty", "Lim Fat", "Rey", "Bundhoo", "Gopee", "Marie",
-];
+// Deliberately artificial names: MTC's real members are imported later, so no demo
+// record may carry a name that could belong to an actual member.
+const SURNAMES = ["EXEMPLE", "FICTIF", "SPECIMEN", "MODELE", "ESSAI", "TEMOIN", "MAQUETTE", "FACTICE"];
 const FIRST = [
-  "Anil", "Christine", "Pravind", "Jean-Marc", "Sandhya", "Kevin", "Nathalie", "Vikash",
-  "Michel", "Isabelle", "Rajesh", "Patrick", "Sharmila", "Olivier", "Deepak", "Sophie",
-  "Ashok", "Thierry", "Kamini", "David", "Navin", "Valérie", "Rishi", "Laurent",
-  "Priya", "Gilles", "Yogesh", "Marie-Claire", "Stéphane", "Anjali", "Sunil", "Josée",
+  "Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Hotel", "India", "Juliett",
+  "Kilo", "Lima", "Mike", "November", "Oscar", "Papa", "Quebec", "Romeo", "Sierra", "Tango",
+  "Uniform", "Victor", "Whiskey", "X-ray", "Yankee", "Zulu",
 ];
 
 /** Months ago each demo member was admitted / continuously a member, and their status. */
@@ -71,7 +67,7 @@ const APPLICATIONS: AppSpec[] = [
   { status: "deferred", receivedDaysAgo: 20, decidedDaysAgo: 15, compliance: "cleared",
     comment: "Payment not processed within 5 business days" },
   { status: "deferred", receivedDaysAgo: 34, decidedDaysAgo: 27, compliance: "pending",
-    comment: "Second sponsor has not confirmed. Please ask Mr Koenig to reply to the sponsorship email or contact the Club." },
+    comment: "Second sponsor has not confirmed. Please ask your second sponsor to reply to the sponsorship email or contact the Club." },
   { status: "rejected", receivedDaysAgo: 40, decidedDaysAgo: 31, compliance: "not_cleared",
     comment: "Compliance screening not cleared. The Committee is unable to accept the application." },
   { status: "rejected", receivedDaysAgo: 65, decidedDaysAgo: 52, compliance: "cleared",
@@ -127,7 +123,7 @@ async function seed(c: PoolClient) {
   const person = () => {
     const i = n++;
     const last = SURNAMES[i % SURNAMES.length];
-    const first = FIRST[(i * 7 + Math.floor(i / SURNAMES.length)) % FIRST.length];
+    const first = FIRST[Math.floor(i / SURNAMES.length) % FIRST.length];
     return { last, first, email: `${slug(first)}.${slug(last)}.${i}@${DOMAIN}`, mobile: `5${String(7000000 + i * 13579).slice(0, 7)}` };
   };
 
@@ -186,8 +182,8 @@ async function seed(c: PoolClient) {
     );
     const appId = app.rows[0].id;
     for (const pos of [1, 2]) {
-      const sLast = SURNAMES[(n * 3 + pos * 5) % SURNAMES.length];
-      const sFirst = FIRST[(n * 5 + pos * 3) % FIRST.length];
+      const sLast = "PARRAIN";
+      const sFirst = FIRST[(n * 2 + pos) % FIRST.length];
       const s = { last: sLast, first: sFirst, email: `${slug(sFirst)}.${slug(sLast)}.s${n}${pos}@${DOMAIN}` };
       await c.query(
         `insert into application_sponsors (application_id, position, last_name, first_names, email, confirmed_at)
