@@ -27,7 +27,7 @@ export async function StaffShell({
     { key: "members", label: "Members" },
     { key: "upgrades", label: "Upgrades" },
     { key: "payments", label: "Payments" },
-    { key: "reports", label: "Reports" },
+    { key: "reports", label: "Reports", href: "/staff/reports" },
     { key: "settings", label: "Settings" },
   ];
 

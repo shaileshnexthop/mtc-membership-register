@@ -127,3 +127,18 @@ sudo -u deploy docker compose --project-directory /opt/mtc exec db psql -U mtc -
 
 Lightsail's browser terminal adds a blank line after each pasted line. Paste one command at a
 time, and avoid commands split over several lines with `\`.
+
+## Demo data for the reports
+
+Fictional members (with past admission dates) and applications in every outcome, all
+using `@demo.invalid` email addresses. Run on the server as the `ubuntu` user:
+
+```
+sudo -u deploy docker compose --project-directory /opt/mtc run --rm migrate node seed-demo.cjs
+```
+
+Remove it again (before MTC's real register is loaded):
+
+```
+sudo -u deploy docker compose --project-directory /opt/mtc run --rm migrate node seed-demo.cjs --remove
+```

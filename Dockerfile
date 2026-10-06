@@ -14,7 +14,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build \
  && npx esbuild scripts/migrate.ts --bundle --platform=node --target=node22 \
-      --external:pg-native --outfile=dist/migrate.cjs
+      --external:pg-native --outfile=dist/migrate.cjs \
+ && npx esbuild scripts/seed-demo.ts --bundle --platform=node --target=node22 \
+      --external:pg-native --outfile=dist/seed-demo.cjs
 
 # ---- Runtime ------------------------------------------------------------
 FROM node:22-bookworm-slim AS runner
@@ -28,6 +30,7 @@ COPY --from=build --chown=node:node /app/.next/standalone ./
 COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/dist/migrate.cjs ./migrate.cjs
+COPY --from=build --chown=node:node /app/dist/seed-demo.cjs ./seed-demo.cjs
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 
 USER node
