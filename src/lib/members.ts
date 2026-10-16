@@ -91,7 +91,7 @@ export async function getMemberRecord(memberId: string) {
           member.applicationId ? eq(schema.payments.applicationId, member.applicationId) : sql`false`,
         ),
       )
-      .orderBy(desc(schema.payments.createdAt)),
+      .orderBy(desc(sql`coalesce(${schema.payments.paidAt}, ${schema.payments.createdAt})`)),
     db
       .select()
       .from(schema.documents)
