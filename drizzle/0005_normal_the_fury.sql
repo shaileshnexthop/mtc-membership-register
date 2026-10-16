@@ -1,0 +1,2 @@
+ALTER TABLE "upgrade_requests" ADD COLUMN "applied_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "upgrade_requests_one_pending_uq" ON "upgrade_requests" USING btree ("member_id") WHERE "upgrade_requests"."status" = 'pending';

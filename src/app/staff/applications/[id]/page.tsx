@@ -10,19 +10,12 @@ import { muDate } from "@/lib/business-days";
 import { hasRole, requireStaffPage } from "@/lib/staff";
 import { DOCUMENT_REQUIREMENTS, monthsSince } from "@/lib/applications";
 import { formatDateEn, formatDateTimeEn, formatSizeEn } from "@/lib/format";
-import { STATUS_EN } from "@/lib/staff-labels";
+import { DOC_EN, STATUS_EN } from "@/lib/staff-labels";
 import s from "@/components/staff.module.css";
 import ui from "@/components/ui.module.css";
 
 export const metadata: Metadata = { title: "Application review" };
 
-const DOC_EN: Record<string, string> = {
-  id_document: "National Identity Card or passport",
-  proof_of_address: "Proof of address (under 3 months)",
-  certificate_of_character: "Certificate of Character (under 6 months)",
-  photo: "Passport-format photograph",
-  other: "Other document requested by the Club",
-};
 
 export default async function ApplicationReview({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireStaffPage();

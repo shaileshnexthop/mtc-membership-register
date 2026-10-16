@@ -101,21 +101,42 @@ const slug = (s: string) =>
 
 async function remove(c: PoolClient) {
   const like = `%@${DOMAIN}`;
-  const m = await c.query(`delete from members where email like $1`, [like]);
-  const a = await c.query(
-    `delete from applications where account_id in (select id from accounts where email like $1)`,
+  // Demo records and everything that points at them (payments, emails, upgrade requests).
+  await c.query(`create temp table demo_acc on commit drop as select id from accounts where email like $1`, [like]);
+  await c.query(
+    `create temp table demo_app on commit drop as select id from applications where account_id in (select id from demo_acc)`,
+  );
+  await c.query(
+    `create temp table demo_mem on commit drop as select id from members
+       where email like $1 or account_id in (select id from demo_acc) or application_id in (select id from demo_app)`,
     [like],
   );
-  const acc = await c.query(`delete from accounts where email like $1`, [like]);
+  await c.query(`delete from upgrade_requests where member_id in (select id from demo_mem)`);
+  await c.query(
+    `delete from payments where member_id in (select id from demo_mem) or application_id in (select id from demo_app)`,
+  );
+  await c.query(
+    `delete from email_log where member_id in (select id from demo_mem) or application_id in (select id from demo_app)`,
+  );
+  await c.query(`delete from documents where member_id in (select id from demo_mem) or application_id in (select id from demo_app)`);
+  await c.query(`update application_sponsors set matched_member_id = null where matched_member_id in (select id from demo_mem)`);
+  const m = await c.query(`delete from members where id in (select id from demo_mem)`);
+  const a = await c.query(`delete from applications where id in (select id from demo_app)`);
+  await c.query(`delete from sessions where account_id in (select id from demo_acc)`);
+  // The audit trail is kept; only its link to the deleted demo account is cleared.
+  await c.query(`update audit_log set account_id = null where account_id in (select id from demo_acc)`);
+  const acc = await c.query(`delete from accounts where id in (select id from demo_acc)`);
   console.log(`Removed ${m.rowCount} demo members, ${a.rowCount} demo applications, ${acc.rowCount} demo accounts`);
 }
 
 async function seed(c: PoolClient) {
-  const types = await c.query<{ id: string; fee_cents: number }>(
-    `select id, fee_cents from membership_types order by sort_order limit 1`,
+  const types = await c.query<{ id: string; name: string; fee_cents: number }>(
+    `select id, name, fee_cents from membership_types where active order by sort_order`,
   );
   if (!types.rowCount) throw new Error("No membership types: run the migrations first");
   const type = types.rows[0];
+  const otherType = types.rows[1] ?? null;
+  const memberIds: string[] = [];
   const staff = await c.query<{ id: string }>(`select id from staff_users order by created_at limit 1`);
   const staffId = staff.rows[0]?.id ?? null;
 
@@ -151,6 +172,39 @@ async function seed(c: PoolClient) {
        values ($1,$2,'admitted','Admitted as member',$3,'system')`,
       [r.rows[0].id, `${since}T10:00:00+04:00`, spec.imported ? "Imported from the existing membership register" : null],
     );
+    memberIds.push(r.rows[0].id);
+  }
+
+  // Upgrade path: one member moved category a year ago; another has a change waiting for approval.
+  if (otherType) {
+    const moved = memberIds[15];
+    const changedOn = monthsAgo(12);
+    await c.query(`update member_type_periods set membership_type_id = $2, end_date = $3 where member_id = $1`, [
+      moved, otherType.id, changedOn,
+    ]);
+    await c.query(
+      `insert into member_type_periods (member_id, membership_type_id, start_date, fee_cents) values ($1,$2,$3,$4)`,
+      [moved, type.id, changedOn, type.fee_cents],
+    );
+    await c.query(
+      `insert into member_events (member_id, at, event_type, title, detail, actor_type)
+       values ($1,$2,'type_changed',$3,'Changed category at the member''s request','system')`,
+      [moved, `${changedOn}T09:00:00+04:00`, `Membership type changed to ${type.name}`],
+    );
+    if (staffId) {
+      const waiting = memberIds[10];
+      await c.query(
+        `insert into upgrade_requests (member_id, from_type_id, to_type_id, effective_date, reason, fee_before_cents,
+           fee_after_cents, requested_by_id, requested_at)
+         values ($1,$2,$3,$4,'Demo: the member asked to move category',$5,$6,$7, now() - interval '1 day')`,
+        [waiting, type.id, otherType.id, nextMonthFirst(), type.fee_cents, otherType.fee_cents, staffId],
+      );
+      await c.query(
+        `insert into member_events (member_id, at, event_type, title, detail, actor_type, staff_user_id)
+         values ($1, now() - interval '1 day', 'upgrade_requested', $2, 'Demo: the member asked to move category', 'staff', $3)`,
+        [waiting, `Change to ${otherType.name} requested`, staffId],
+      );
+    }
   }
 
   // Applications in every outcome, each with its own applicant account.

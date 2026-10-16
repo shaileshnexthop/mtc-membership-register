@@ -568,10 +568,15 @@ export const upgradeRequests = pgTable(
     decisionComment: text("decision_comment"),
     lastReminderAt: ts("last_reminder_at"),
     memberNotifiedAt: ts("member_notified_at"),
+    appliedAt: ts("applied_at"), // type and fee changed on the member record (on the effective date)
   },
   (t) => [
     index("upgrade_requests_status_idx").on(t.status),
     index("upgrade_requests_member_idx").on(t.memberId),
+    // One open request per member at a time.
+    uniqueIndex("upgrade_requests_one_pending_uq")
+      .on(t.memberId)
+      .where(sql`${t.status} = 'pending'`),
   ],
 );
 

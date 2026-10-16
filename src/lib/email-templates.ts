@@ -9,8 +9,8 @@ import { appBaseUrl } from "./config";
 const esc = (s: string) =>
   s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-function layout(title: string, bodyHtml: string): string {
-  return `<!doctype html><html lang="fr"><body style="margin:0;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#16181d">
+function layout(title: string, bodyHtml: string, lang: "fr" | "en" = "fr"): string {
+  return `<!doctype html><html lang="${lang}"><body style="margin:0;background:#f6f4ef;font-family:Arial,Helvetica,sans-serif;color:#16181d">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f6f4ef;padding:24px 0"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border:1px solid #e2dcd0;border-radius:8px">
 <tr><td style="padding:16px 24px;border-bottom:1px solid #e2dcd0"><img src="${esc(appBaseUrl())}/mtcjc-logo.png" width="81" height="60" alt="MTC Jockey Club" style="display:block;border:0"></td></tr>
@@ -18,14 +18,22 @@ function layout(title: string, bodyHtml: string): string {
 <h1 style="margin:0 0 16px;font-family:Georgia,serif;font-size:22px;color:#13224f">${esc(title)}</h1>
 ${bodyHtml}
 </td></tr>
-<tr><td style="padding:16px 24px;border-top:1px solid #e2dcd0;font-size:12px;color:#5b606b">The Mauritius Turf Club · Champ de Mars, Port Louis · Ce message a été envoyé automatiquement.</td></tr>
+<tr><td style="padding:16px 24px;border-top:1px solid #e2dcd0;font-size:12px;color:#5b606b">The Mauritius Turf Club · Champ de Mars, Port Louis · ${lang === "en" ? "Staff notification from the membership portal." : "Ce message a été envoyé automatiquement."}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
-function button(href: string, label: string): string {
+function button(href: string, label: string, lang: "fr" | "en" = "fr"): string {
   return `<p style="margin:24px 0"><a href="${esc(href)}" style="display:inline-block;background:#1b2f6b;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 22px;border-radius:6px">${esc(label)}</a></p>
-<p style="font-size:13px;color:#5b606b">Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :<br><span style="word-break:break-all">${esc(href)}</span></p>`;
+<p style="font-size:13px;color:#5b606b">${lang === "en" ? "If the button does not work, copy this link into your browser:" : "Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur :"}<br><span style="word-break:break-all">${esc(href)}</span></p>`;
 }
+
+const kv = (rows: [string, string][]) =>
+  `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;padding:14px 16px;background:#eef1f8;border-radius:6px;font-size:15px">${rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:6px 12px 6px 0;color:#5b606b;white-space:nowrap;vertical-align:top">${esc(k)}</td><td style="padding:6px 0;font-weight:bold">${esc(v)}</td></tr>`,
+    )
+    .join("")}</table>`;
 
 export function verificationEmail(name: string, link: string) {
   const subject = "Confirmez votre adresse courriel – Mauritius Turf Club";
@@ -190,5 +198,98 @@ export function applicationRejectedEmail(name: string, reference: string, commen
 <p>Conformément aux Statuts du Club, cette décision relève de l’appréciation discrétionnaire des Administrateurs.</p>`,
   );
   const text = `Bonjour ${name},\n\nLe Club n’est pas en mesure de donner une suite favorable à votre candidature ${reference}.\nCommentaire : ${comment}`;
+  return { subject, html, text };
+}
+
+/* ------------------------------------------------------------------ */
+/* Membership type changes (UPG-03, UPG-05, UPG-06)                    */
+/* ------------------------------------------------------------------ */
+
+/** UPG-03: to the Approver group. Staff emails are in English. */
+export function upgradeRequestedStaffEmail(p: {
+  memberName: string;
+  memberNumber: string;
+  fromType: string;
+  toType: string;
+  feeBefore: string;
+  feeAfter: string;
+  effective: string;
+  reason: string;
+  requestedBy: string;
+  link: string;
+  reminder?: boolean;
+}) {
+  const subject = `${p.reminder ? "Reminder: " : ""}Membership change to approve – ${p.memberNumber} ${p.memberName}`;
+  const html = layout(
+    p.reminder ? "Reminder: a membership change is waiting" : "A membership change needs your approval",
+    `<p>${esc(p.requestedBy)} has asked to change the membership of <strong>${esc(p.memberName)}</strong> (${esc(p.memberNumber)}).</p>
+${kv([
+  ["From", `${p.fromType} · ${p.feeBefore}`],
+  ["To", `${p.toType} · ${p.feeAfter}`],
+  ["Effective", p.effective],
+  ["Reason", p.reason],
+])}
+<p>Sign in to the portal with your Microsoft 365 account to approve or reject. The person who raised the request cannot approve it.</p>
+${button(p.link, "Review the request", "en")}`,
+    "en",
+  );
+  const text = `${p.requestedBy} has asked to change the membership of ${p.memberName} (${p.memberNumber}).\nFrom: ${p.fromType} · ${p.feeBefore}\nTo: ${p.toType} · ${p.feeAfter}\nEffective: ${p.effective}\nReason: ${p.reason}\n\nReview the request (Microsoft 365 sign-in): ${p.link}`;
+  return { subject, html, text };
+}
+
+/** UPG-05: outcome to the staff member who raised the request. */
+export function upgradeDecisionStaffEmail(p: {
+  memberName: string;
+  memberNumber: string;
+  toType: string;
+  approved: boolean;
+  decidedBy: string;
+  comment: string | null;
+  effective: string;
+  link: string;
+}) {
+  const verb = p.approved ? "approved" : "rejected";
+  const subject = `Membership change ${verb} – ${p.memberNumber} ${p.memberName}`;
+  const html = layout(
+    `Membership change ${verb}`,
+    `<p>${esc(p.decidedBy)} has <strong>${verb}</strong> your request to change <strong>${esc(p.memberName)}</strong> (${esc(p.memberNumber)}) to <strong>${esc(p.toType)}</strong>${p.approved ? `, effective ${esc(p.effective)}` : ""}.</p>
+${p.comment ? `<p><strong>Comment:</strong><br>${esc(p.comment).replace(/\n/g, "<br>")}</p>` : ""}
+${p.approved ? "<p>The member has been emailed the confirmation.</p>" : ""}
+${button(p.link, "Open the member record", "en")}`,
+    "en",
+  );
+  const text = `${p.decidedBy} has ${verb} the change of ${p.memberName} (${p.memberNumber}) to ${p.toType}${p.approved ? `, effective ${p.effective}` : ""}.\n${p.comment ? `Comment: ${p.comment}\n` : ""}\n${p.link}`;
+  return { subject, html, text };
+}
+
+/** UPG-06: confirmation to the member, with the new fee where it changes. */
+export function membershipChangedEmail(p: {
+  name: string;
+  memberNumber: string;
+  fromType: string;
+  toType: string;
+  effective: string;
+  feeBefore: string;
+  feeAfter: string;
+  feeChanged: boolean;
+  link: string;
+}) {
+  const subject = `Votre adhésion devient ${p.toType} – Mauritius Turf Club`;
+  const rows: [string, string][] = [
+    ["Numéro de membre", p.memberNumber],
+    ["Ancienne catégorie", p.fromType],
+    ["Nouvelle catégorie", p.toType],
+    ["Date d’effet", p.effective],
+  ];
+  if (p.feeChanged) rows.push(["Nouvelle cotisation", p.feeAfter]);
+  const html = layout(
+    "Changement de catégorie de membre",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Nous vous confirmons que votre adhésion au Mauritius Turf Club passe de <strong>${esc(p.fromType)}</strong> à <strong>${esc(p.toType)}</strong> à compter du <strong>${esc(p.effective)}</strong>.</p>
+${kv(rows)}
+${p.feeChanged ? `<p>Votre cotisation passe de ${esc(p.feeBefore)} à <strong>${esc(p.feeAfter)}</strong> à compter de cette date.</p>` : "<p>Le montant de votre cotisation reste inchangé.</p>"}
+${button(p.link, "Accéder à mon espace membre")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre adhésion (membre ${p.memberNumber}) passe de ${p.fromType} à ${p.toType} à compter du ${p.effective}.\n${p.feeChanged ? `Votre cotisation passe de ${p.feeBefore} à ${p.feeAfter}.` : "Le montant de votre cotisation reste inchangé."}\n\nVotre espace membre : ${p.link}`;
   return { subject, html, text };
 }

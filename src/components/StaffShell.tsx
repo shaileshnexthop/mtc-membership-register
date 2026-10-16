@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { count, eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
+import { pendingUpgradeCount } from "@/lib/members";
 import { SiteHeader } from "./SiteHeader";
 import { ROLE_LABELS, type Staff } from "@/lib/staff";
 import s from "./staff.module.css";
@@ -21,11 +22,12 @@ export async function StaffShell({
     .select({ n: count() })
     .from(schema.applications)
     .where(eq(schema.applications.status, "submitted"));
+  const pendingUpgrades = await pendingUpgradeCount();
 
   const items: { key: StaffSection; label: string; href?: string; badge?: number }[] = [
     { key: "applications", label: "Applications", href: "/staff/applications", badge: toReview },
-    { key: "members", label: "Members" },
-    { key: "upgrades", label: "Upgrades" },
+    { key: "members", label: "Members", href: "/staff/members" },
+    { key: "upgrades", label: "Upgrades", href: "/staff/upgrades", badge: pendingUpgrades },
     { key: "payments", label: "Payments" },
     { key: "reports", label: "Reports", href: "/staff/reports" },
     { key: "settings", label: "Settings" },

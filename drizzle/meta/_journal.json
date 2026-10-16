@@ -36,6 +36,13 @@
       "when": 1791304369805,
       "tag": "0004_peaceful_swarm",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792134532750,
+      "tag": "0005_normal_the_fury",
+      "breakpoints": true
     }
   ]
 }
