@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StaffShell } from "@/components/StaffShell";
 import { DetailsForm, StatusForm, UpgradeRequestForm } from "@/components/MemberForms";
+import { DuesPaymentForm, RefundForm } from "@/components/FinanceForms";
 import { hasRole, requireStaffPage } from "@/lib/staff";
 import { formatDateEn, formatDateTimeEn, formatMur, formatSizeEn } from "@/lib/format";
 import { tenureLabel } from "@/lib/reports";
@@ -213,9 +214,12 @@ export default async function MemberRecordPage({ params }: { params: Promise<{ i
                         </td>
                         <td>
                           {p.status === "paid" ? (
-                            <a href={`/recu/${p.id}`} target="_blank" rel="noopener">
-                              View
-                            </a>
+                            <span className={s.rowActions} style={{ flexWrap: "nowrap" }}>
+                              <a href={`/recu/${p.id}`} target="_blank" rel="noopener">
+                                View
+                              </a>
+                              {hasRole(staff, "finance") ? <RefundForm paymentId={p.id} /> : null}
+                            </span>
                           ) : (
                             "—"
                           )}
@@ -320,6 +324,34 @@ export default async function MemberRecordPage({ params }: { params: Promise<{ i
                 types={types.map((t) => ({ id: t.id, name: t.name, feeLabel: feeLabelEn(t.feeCents, t.feePeriod) }))}
                 today={today}
               />
+            ) : null}
+          </section>
+
+          <section className={s.card} aria-labelledby="h-dues">
+            <h2 id="h-dues" className={s.cardTitle}>
+              Dues
+            </h2>
+            <p style={{ margin: 0 }}>
+              Next due <strong>{m.nextDueOn ? formatDateEn(m.nextDueOn) : "—"}</strong>
+              {overdue ? (
+                <span className={s.note} style={{ color: "var(--bad)" }}>
+                  {" "}
+                  · overdue, est. {formatMur(arrears.amountCents)}
+                </span>
+              ) : null}
+            </p>
+            {hasRole(staff, "finance") && (m.status === "active" || m.status === "renewal_due") ? (
+              <DuesPaymentForm
+                memberId={m.id}
+                feeCents={m.currentFeeCents}
+                periodLabel={period === "annual" ? "year" : "month"}
+                today={today}
+                startLabel={m.nextDueOn ? formatDateEn(m.nextDueOn) : "from the payment date"}
+              />
+            ) : m.status === "lapsed" || m.status === "resigned" ? (
+              <p className={s.note} style={{ margin: 0 }}>
+                An Administrator must reinstate the member before dues can be recorded.
+              </p>
             ) : null}
           </section>
 

@@ -31,3 +31,24 @@ export async function addBusinessDays(from: Date, n: number): Promise<Date> {
 export function isPast(d: Date | null | undefined): boolean {
   return d ? d.getTime() < Date.now() : false;
 }
+
+/** Business days d with from < d <= to (YYYY-MM-DD, Mauritius), skipping weekends and holidays. */
+export async function businessDaysAfter(from: string, to: string): Promise<number> {
+  if (to <= from) return 0;
+  const rows = await getDb().select({ day: schema.publicHolidays.day }).from(schema.publicHolidays);
+  const holidays = new Set(rows.map((r) => String(r.day)));
+  const cursor = new Date(`${from}T00:00:00Z`);
+  let n = 0;
+  for (;;) {
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+    const iso = cursor.toISOString().slice(0, 10);
+    if (iso > to) return n;
+    const dow = cursor.getUTCDay();
+    if (dow !== 0 && dow !== 6 && !holidays.has(iso)) n++;
+  }
+}
+
+/** Hour of the day in Mauritius (0–23). */
+export function muHour(d = new Date()): number {
+  return new Date(d.getTime() + MU_OFFSET_MS).getUTCHours();
+}

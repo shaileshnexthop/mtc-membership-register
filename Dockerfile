@@ -16,7 +16,9 @@ RUN npm run build \
  && npx esbuild scripts/migrate.ts --bundle --platform=node --target=node22 \
       --external:pg-native --outfile=dist/migrate.cjs \
  && npx esbuild scripts/seed-demo.ts --bundle --platform=node --target=node22 \
-      --external:pg-native --outfile=dist/seed-demo.cjs
+      --external:pg-native --outfile=dist/seed-demo.cjs \
+ && npx esbuild scripts/daily-job.ts --bundle --platform=node --target=node22 \
+      --conditions=react-server --external:pg-native --outfile=dist/daily-job.cjs
 
 # ---- Runtime ------------------------------------------------------------
 FROM node:22-bookworm-slim AS runner
@@ -31,6 +33,7 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/dist/migrate.cjs ./migrate.cjs
 COPY --from=build --chown=node:node /app/dist/seed-demo.cjs ./seed-demo.cjs
+COPY --from=build --chown=node:node /app/dist/daily-job.cjs ./daily-job.cjs
 COPY --from=build --chown=node:node /app/drizzle ./drizzle
 
 USER node

@@ -132,6 +132,8 @@ export default async function ApplicationOverview({
               <dl className={s.bankBox}>
                 <dt>Institution bancaire</dt>
                 <dd>{bank.bankName}</dd>
+                <dt>Titulaire du compte</dt>
+                <dd>{bank.accountHolder}</dd>
                 <dt>Numéro de compte</dt>
                 <dd>{bank.accountNumber}</dd>
                 <dt>Montant</dt>

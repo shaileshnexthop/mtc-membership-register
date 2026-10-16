@@ -8,10 +8,11 @@ export async function getSettings<K extends string>(keys: K[]): Promise<Partial<
   return Object.fromEntries(rows.map((r) => [r.key, r.value])) as Partial<Record<K, unknown>>;
 }
 
-export async function getBankDetails(): Promise<{ bankName: string; accountNumber: string }> {
-  const s = await getSettings(["payment_bank_name", "payment_bank_account"]);
+export async function getBankDetails(): Promise<{ bankName: string; accountNumber: string; accountHolder: string }> {
+  const s = await getSettings(["payment_bank_name", "payment_bank_account", "payment_bank_holder"]);
   return {
     bankName: String(s.payment_bank_name ?? "[banque à confirmer]"),
     accountNumber: String(s.payment_bank_account ?? "[numéro de compte à confirmer]"),
+    accountHolder: String(s.payment_bank_holder ?? "Mauritius Turf Club"),
   };
 }

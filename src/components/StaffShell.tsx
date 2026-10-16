@@ -28,7 +28,7 @@ export async function StaffShell({
     { key: "applications", label: "Applications", href: "/staff/applications", badge: toReview },
     { key: "members", label: "Members", href: "/staff/members" },
     { key: "upgrades", label: "Upgrades", href: "/staff/upgrades", badge: pendingUpgrades },
-    { key: "payments", label: "Payments" },
+    { key: "payments", label: "Payments", href: "/staff/payments" },
     { key: "reports", label: "Reports", href: "/staff/reports" },
     { key: "settings", label: "Settings" },
   ];

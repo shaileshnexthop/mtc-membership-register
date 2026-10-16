@@ -122,6 +122,7 @@ export function applicationApprovedEmail(p: {
   conditions: string | null;
   bankName: string;
   accountNumber: string;
+  accountHolder: string;
   link: string;
   payLink: string | null;
 }) {
@@ -137,6 +138,7 @@ ${p.conditions ? `<p><strong>Conditions d’adhésion :</strong><br>${esc(p.cond
 ${p.payLink ? `${button(p.payLink, "Payer en ligne")}<p style="font-size:13px;color:#5b606b;margin-top:0">Paiement sécurisé par carte bancaire via Peach Payments. Vous devrez vous connecter à votre compte.</p><p>Vous pouvez également régler par virement bancaire :</p>` : "<p>Merci de régler par virement bancaire :</p>"}
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:16px 0;padding:14px 16px;background:#eef1f8;border-radius:6px;font-size:15px">
 ${row("Institution bancaire", p.bankName)}
+${row("Titulaire du compte", p.accountHolder)}
 ${row("Numéro de compte", p.accountNumber)}
 ${row("Montant", p.feeLabel)}
 ${row("Référence à indiquer", p.reference)}
@@ -144,7 +146,7 @@ ${row("Référence à indiquer", p.reference)}
 <p style="font-size:13px;color:#5b606b">Merci d’indiquer la référence ${esc(p.reference)} sur votre virement afin que le Club puisse l’identifier.</p>
 ${p.payLink ? "" : button(p.link, "Voir ma candidature")}`,
   );
-  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}\nMerci de régler votre cotisation de ${p.feeLabel} au plus tard le ${p.dueLabel} (${p.deadlineDays} jours ouvrables).\n${p.payLink ? `\nPayer en ligne par carte : ${p.payLink}\n\nOu par virement bancaire :` : "\nPar virement bancaire :"}\nInstitution bancaire : ${p.bankName}\nNuméro de compte : ${p.accountNumber}\nMontant : ${p.feeLabel}\nRéférence à indiquer : ${p.reference}\n\nVoir ma candidature : ${p.link}`;
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} (${p.typeName}) a été approuvée.\n${p.conditions ? `Conditions : ${p.conditions}\n` : ""}\nMerci de régler votre cotisation de ${p.feeLabel} au plus tard le ${p.dueLabel} (${p.deadlineDays} jours ouvrables).\n${p.payLink ? `\nPayer en ligne par carte : ${p.payLink}\n\nOu par virement bancaire :` : "\nPar virement bancaire :"}\nInstitution bancaire : ${p.bankName}\nTitulaire du compte : ${p.accountHolder}\nNuméro de compte : ${p.accountNumber}\nMontant : ${p.feeLabel}\nRéférence à indiquer : ${p.reference}\n\nVoir ma candidature : ${p.link}`;
   return { subject, html, text };
 }
 
@@ -291,5 +293,87 @@ ${p.feeChanged ? `<p>Votre cotisation passe de ${esc(p.feeBefore)} à <strong>${
 ${button(p.link, "Accéder à mon espace membre")}`,
   );
   const text = `Bonjour ${p.name},\n\nVotre adhésion (membre ${p.memberNumber}) passe de ${p.fromType} à ${p.toType} à compter du ${p.effective}.\n${p.feeChanged ? `Votre cotisation passe de ${p.feeBefore} à ${p.feeAfter}.` : "Le montant de votre cotisation reste inchangé."}\n\nVotre espace membre : ${p.link}`;
+  return { subject, html, text };
+}
+
+/* ------------------------------------------------------------------ */
+/* Dues, reminders and lapsing (REN-04, PAY-06)                        */
+/* ------------------------------------------------------------------ */
+
+/** Receipt for a dues payment recorded by Finance. */
+export function duesReceiptEmail(p: {
+  name: string;
+  memberNumber: string;
+  amountLabel: string;
+  paidOn: string;
+  period: string;
+  method: string;
+  reference: string;
+  nextDue: string;
+  link: string;
+}) {
+  const subject = `Reçu de cotisation – membre ${p.memberNumber}`;
+  const html = layout(
+    "Reçu de cotisation",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Nous accusons réception de votre cotisation. Merci.</p>
+${kv([
+  ["Numéro de membre", p.memberNumber],
+  ["Montant reçu", p.amountLabel],
+  ["Date du paiement", p.paidOn],
+  ["Période couverte", p.period],
+  ["Mode de paiement", p.method],
+  ["Référence", p.reference],
+  ["Prochaine échéance", p.nextDue],
+])}
+<p>Ce courriel vaut reçu de paiement.</p>
+${button(p.link, "Accéder à mon espace membre")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nNous accusons réception de votre cotisation de ${p.amountLabel} le ${p.paidOn} (${p.method}, référence ${p.reference}).\nPériode couverte : ${p.period}\nProchaine échéance : ${p.nextDue}\nCe courriel vaut reçu de paiement.\n\n${p.link}`;
+  return { subject, html, text };
+}
+
+/** PAY-06: reminder before the joining-fee deadline. */
+export function paymentReminderEmail(p: {
+  name: string;
+  reference: string;
+  feeLabel: string;
+  dueLabel: string;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  payLink: string;
+  lastDay: boolean;
+}) {
+  const subject = `${p.lastDay ? "Dernier jour" : "Rappel"} : paiement de votre adhésion ${p.reference}`;
+  const html = layout(
+    p.lastDay ? "Dernier jour pour régler votre adhésion" : "Rappel : votre paiement est attendu",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Votre candidature <strong>${esc(p.reference)}</strong> a été approuvée, mais nous n’avons pas encore reçu votre paiement de <strong>${esc(p.feeLabel)}</strong>. La date limite est le <strong>${esc(p.dueLabel)}</strong>${p.lastDay ? " (aujourd’hui)" : ""}. Passé ce délai, votre candidature sera automatiquement différée.</p>
+${button(p.payLink, "Régler ma cotisation")}
+<p>Ou par virement bancaire :</p>
+${kv([
+  ["Institution bancaire", p.bankName],
+  ["Titulaire du compte", p.accountHolder],
+  ["Numéro de compte", p.accountNumber],
+  ["Référence à indiquer", p.reference],
+])}
+<p style="font-size:13px;color:#5b606b">Si vous avez déjà effectué votre virement, merci de ne pas tenir compte de ce message.</p>`,
+  );
+  const text = `Bonjour ${p.name},\n\nNous n’avons pas encore reçu votre paiement de ${p.feeLabel} pour la candidature ${p.reference}. Date limite : ${p.dueLabel}.\nPayer en ligne : ${p.payLink}\nOu par virement : ${p.bankName}, ${p.accountHolder}, compte ${p.accountNumber}, référence ${p.reference}.`;
+  return { subject, html, text };
+}
+
+/** REN-04: membership lapsed after the grace period. */
+export function membershipLapsedEmail(p: { name: string; memberNumber: string; dueLabel: string; link: string }) {
+  const subject = `Votre adhésion au Mauritius Turf Club a expiré – ${p.memberNumber}`;
+  const html = layout(
+    "Votre adhésion a expiré",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Votre cotisation due le <strong>${esc(p.dueLabel)}</strong> n’a pas été reçue dans le délai de grâce. Votre adhésion (membre ${esc(p.memberNumber)}) est donc expirée.</p>
+<p>Pour la rétablir, veuillez contacter le secrétariat du Club. Votre numéro de membre est conservé.</p>
+${button(p.link, "Accéder à mon espace")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre cotisation due le ${p.dueLabel} n’a pas été reçue dans le délai de grâce. Votre adhésion (membre ${p.memberNumber}) est expirée. Contactez le secrétariat du Club pour la rétablir.\n\n${p.link}`;
   return { subject, html, text };
 }

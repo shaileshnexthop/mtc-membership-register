@@ -39,6 +39,19 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # Hourly checks: payment deadlines and reminders, approval reminders,
+  # renewals and lapsing (src/lib/daily-job.ts). Safe to run repeatedly.
+  scheduler:
+    image: mtc-membership:latest
+    restart: unless-stopped
+    command: ["sh", "-c", "while true; do node daily-job.cjs; sleep 3600; done"]
+    env_file: .env
+    healthcheck:
+      disable: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
   caddy:
     image: caddy:2
     restart: unless-stopped

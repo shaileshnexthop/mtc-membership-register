@@ -92,12 +92,34 @@ function monthsAgo(n: number): string {
   d.setUTCDate(5 + (n % 20));
   return isoDay(d);
 }
+/** First day of the month, n months from now (negative = past). */
+function monthFirst(n: number): string {
+  const d = new Date();
+  return isoDay(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)));
+}
+function shiftIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoDay(d);
+}
+function monthFirstFrom(iso: string, n: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  return isoDay(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)));
+}
 function nextMonthFirst(): string {
   const d = new Date();
   return isoDay(new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)));
 }
 const slug = (s: string) =>
   s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]+/g, ".").replace(/^\.|\.$/g, "");
+
+/** Next due date by status: active members are paid up; others are behind. */
+function nextDueFor(status: string): string | null {
+  if (status === "active") return monthFirst(1);
+  if (status === "renewal_due") return monthFirst(0) <= isoDay(new Date()) ? monthFirst(0) : monthFirst(-1);
+  if (status === "lapsed") return monthFirst(-3);
+  return null;
+}
 
 async function remove(c: PoolClient) {
   const like = `%@${DOMAIN}`;
@@ -137,6 +159,29 @@ async function seed(c: PoolClient) {
   const type = types.rows[0];
   const otherType = types.rows[1] ?? null;
   const memberIds: string[] = [];
+  // Demo amounts use the type's fee, or Rs 1,500 while MTC's fees are still to be confirmed.
+  const fee = type.fee_cents || 150000;
+  const payDues = async (memberId: string, nextDue: string, periods: number) => {
+    for (let i = periods; i >= 1; i--) {
+      const end = monthFirstFrom(nextDue, -(i - 1));
+      const start = monthFirstFrom(nextDue, -i);
+      // Paid early in the month it covers (never in the future).
+      const yesterday = shiftIso(isoDay(new Date()), -1);
+      const paidOn = shiftIso(start, 2) < yesterday ? shiftIso(start, 2) : yesterday;
+      await c.query(
+        `insert into payments (member_id, purpose, period_start, period_end, amount_cents, status, method, reference,
+           recorded_by_id, paid_at)
+         values ($1,'dues',$2,$3,$4,'paid',$5,$6,$7,$8)`,
+        [memberId, start, end, fee, i % 3 === 0 ? "cheque" : "bank_transfer", `MCB-DEMO-${start.replace(/-/g, "")}`, staffId,
+          `${paidOn}T10:00:00+04:00`],
+      );
+      await c.query(
+        `insert into member_events (member_id, at, event_type, title, detail, actor_type, staff_user_id)
+         values ($1,$2,'payment','Dues payment received',$3,'staff',$4)`,
+        [memberId, `${paidOn}T10:00:00+04:00`, `Rs ${(fee / 100).toFixed(2)} · covers ${start} to ${end}`, staffId],
+      );
+    }
+  };
   const staff = await c.query<{ id: string }>(`select id from staff_users order by created_at limit 1`);
   const staffId = staff.rows[0]?.id ?? null;
 
@@ -160,12 +205,12 @@ async function seed(c: PoolClient) {
       `insert into members (member_number, membership_type_id, status, last_name, first_names, email, mobile_phone,
          nationality, member_since, continuous_since, current_fee_cents, next_due_on, imported_from_register)
        values ($1,$2,$3,$4,$5,$6,$7,'Mauricienne',$8,$9,$10,$11,$12) returning id`,
-      [memberNumber, type.id, spec.status, p.last.toUpperCase(), p.first, p.email, p.mobile, since, cont, type.fee_cents,
-        spec.status === "active" || spec.status === "renewal_due" ? nextMonthFirst() : null, spec.imported],
+      [memberNumber, type.id, spec.status, p.last.toUpperCase(), p.first, p.email, p.mobile, since, cont, fee,
+        nextDueFor(spec.status), spec.imported],
     );
     await c.query(
       `insert into member_type_periods (member_id, membership_type_id, start_date, fee_cents) values ($1,$2,$3,$4)`,
-      [r.rows[0].id, type.id, cont, type.fee_cents],
+      [r.rows[0].id, type.id, cont, fee],
     );
     await c.query(
       `insert into member_events (member_id, at, event_type, title, detail, actor_type)
@@ -173,6 +218,23 @@ async function seed(c: PoolClient) {
       [r.rows[0].id, `${since}T10:00:00+04:00`, spec.imported ? "Imported from the existing membership register" : null],
     );
     memberIds.push(r.rows[0].id);
+    // Dues history: three months of payments up to the next due date.
+    const due = nextDueFor(spec.status);
+    if (due) await payDues(r.rows[0].id, due, Math.min(3, Math.max(1, spec.since)));
+    if (spec.status === "renewal_due") {
+      await c.query(
+        `insert into member_events (member_id, at, event_type, title, detail, actor_type)
+         values ($1,$2,'renewal_due','Renewal due',$3,'system')`,
+        [r.rows[0].id, `${shiftIso(due!, 1)}T01:00:00+04:00`, `Dues due ${due} not yet received`],
+      );
+    }
+    if (spec.status === "lapsed") {
+      await c.query(
+        `insert into member_events (member_id, at, event_type, title, detail, actor_type)
+         values ($1,$2,'lapsed','Membership lapsed',$3,'system')`,
+        [r.rows[0].id, `${shiftIso(due!, 31)}T09:00:00+04:00`, `Dues due ${due} not received within 30 days`],
+      );
+    }
   }
 
   // Upgrade path: one member moved category a year ago; another has a change waiting for approval.
@@ -184,7 +246,7 @@ async function seed(c: PoolClient) {
     ]);
     await c.query(
       `insert into member_type_periods (member_id, membership_type_id, start_date, fee_cents) values ($1,$2,$3,$4)`,
-      [moved, type.id, changedOn, type.fee_cents],
+      [moved, type.id, changedOn, fee],
     );
     await c.query(
       `insert into member_events (member_id, at, event_type, title, detail, actor_type)
@@ -197,7 +259,7 @@ async function seed(c: PoolClient) {
         `insert into upgrade_requests (member_id, from_type_id, to_type_id, effective_date, reason, fee_before_cents,
            fee_after_cents, requested_by_id, requested_at)
          values ($1,$2,$3,$4,'Demo: the member asked to move category',$5,$6,$7, now() - interval '1 day')`,
-        [waiting, type.id, otherType.id, nextMonthFirst(), type.fee_cents, otherType.fee_cents, staffId],
+        [waiting, type.id, otherType.id, nextMonthFirst(), fee, otherType.fee_cents, staffId],
       );
       await c.query(
         `insert into member_events (member_id, at, event_type, title, detail, actor_type, staff_user_id)
@@ -267,16 +329,22 @@ async function seed(c: PoolClient) {
         `insert into members (member_number, account_id, application_id, membership_type_id, status, last_name, first_names,
            email, mobile_phone, nationality, member_since, continuous_since, current_fee_cents, next_due_on)
          values ($1,$2,$3,$4,'active',$5,$6,$7,$8,'Mauricienne',$9,$9,$10,$11) returning id`,
-        [memberNumber, accountId, appId, type.id, p.last.toUpperCase(), p.first, p.email, p.mobile, since, type.fee_cents, nextMonthFirst()],
+        [memberNumber, accountId, appId, type.id, p.last.toUpperCase(), p.first, p.email, p.mobile, since, fee, nextMonthFirst()],
       );
       await c.query(
         `insert into member_type_periods (member_id, membership_type_id, start_date, fee_cents) values ($1,$2,$3,$4)`,
-        [m.rows[0].id, type.id, since, type.fee_cents],
+        [m.rows[0].id, type.id, since, fee],
       );
       await c.query(
         `insert into member_events (member_id, at, event_type, title, detail, actor_type)
          values ($1,$2,'admitted','Admitted as member',$3,'system')`,
         [m.rows[0].id, admitted, `Application ${reference}`],
+      );
+      await c.query(
+        `insert into payments (application_id, member_id, purpose, period_start, period_end, amount_cents, status, method,
+           reference, recorded_by_id, paid_at)
+         values ($1,$2,'joining',$3,$4,$5,'paid','bank_transfer',$6,$7,$8)`,
+        [appId, m.rows[0].id, since, nextMonthFirst(), fee, reference, staffId, admitted],
       );
     }
   }

@@ -177,3 +177,16 @@ no card details reach the portal. Without Peach keys, the portal offers bank tra
    ```
 
 Sandbox test card: Visa 4200 0000 0000 0091 (any future expiry, any 3-digit CVV).
+
+## Scheduled checks (the `scheduler` container)
+
+Runs every hour (src/lib/daily-job.ts) and is safe to repeat:
+
+- defers approved applications not paid by the deadline ("Payment not processed within 3 business days") and emails the applicant;
+- emails payment reminders on business days 2 and 3 after approval (08:00–18:00 only);
+- re-sends membership-change requests to the Approvers when undecided after 3 business days;
+- applies approved membership changes on their effective date;
+- marks members "renewal due" once their next due date has passed, and lapses them (with an email) after the grace period (`renewal_grace_days`, 30 days).
+
+See what it did: `sudo -u deploy docker compose --project-directory /opt/mtc logs --tail=50 scheduler`
+Run it once by hand: `sudo -u deploy docker compose --project-directory /opt/mtc exec scheduler node daily-job.cjs`

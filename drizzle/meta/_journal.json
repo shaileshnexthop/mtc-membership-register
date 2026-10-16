@@ -43,6 +43,13 @@
       "when": 1792134532750,
       "tag": "0005_normal_the_fury",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1792138284459,
+      "tag": "0006_mcb_bank_details",
+      "breakpoints": true
     }
   ]
 }

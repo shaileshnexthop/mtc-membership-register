@@ -341,7 +341,7 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                 <>
                   <p className={s.note} style={{ margin: 0 }}>
                     Due by {formatDateEn(app.paymentDueAt)}. The applicant can pay by card online (confirmed
-                    automatically) or transfer to {bank.bankName}, account {bank.accountNumber}, quoting{" "}
+                    automatically) or transfer to {bank.bankName}, account {bank.accountNumber} ({bank.accountHolder}), quoting{" "}
                     <strong>{app.reference}</strong>. Record a transfer, cash or cheque here.
                   </p>
                   {hasRole(staff, "finance") ? (

@@ -36,9 +36,10 @@ const settings: Record<string, unknown> = {
   proof_of_address_max_age_months: 3,
   certificate_of_character_max_age_months: 6,
   upload_max_bytes: 10 * 1024 * 1024,
-  // Bank transfer details shown to approved applicants (demo values until MTC provides its own).
-  payment_bank_name: "Banque Santander",
-  payment_bank_account: "0008 7787887 666556",
+  // Bank transfer details shown to approved applicants (MTC account, confirmed 16 Oct 2026).
+  payment_bank_name: "The Mauritius Commercial Bank",
+  payment_bank_account: "000010053468",
+  payment_bank_holder: "Mauritius Turf Club",
 };
 
 /**
