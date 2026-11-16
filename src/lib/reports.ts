@@ -17,6 +17,8 @@ export const APPLICATION_STATUSES = [
   { key: "deferred", label: "Deferred" },
   { key: "rejected", label: "Rejected" },
   { key: "draft", label: "Draft (not submitted)" },
+  { key: "closed", label: "Closed – to be deleted" },
+  { key: "deleted", label: "Deleted – record kept" },
 ] as const;
 
 export const MEMBER_STATUSES = [
@@ -45,6 +47,7 @@ export const PRESETS: { key: string; label: string; title: string; href: string 
   { key: "deferred", label: "Deferred applications", title: "Deferred membership applications", href: "/staff/reports?report=applications&status=deferred" },
   { key: "rejected", label: "Rejected applications", title: "Rejected membership applications", href: "/staff/reports?report=applications&status=rejected" },
   { key: "inreview", label: "In review", title: "Membership applications in review", href: "/staff/reports?report=applications&status=submitted" },
+  { key: "closed", label: "Closed and deleted", title: "Closed and deleted applications", href: "/staff/reports?report=applications&status=closed&status=deleted" },
 ];
 
 /** Report title: the preset's name when the status/tenure filters match one, else a generic title. */
@@ -93,7 +96,7 @@ export function parseFilters(p: Params): Filters {
     const statuses = list(p.status).filter((s) => allowed.includes(s));
     return {
       report,
-      statuses: statuses.length ? statuses : ["submitted", "approved", "admitted", "deferred", "rejected"],
+      statuses: statuses.length ? statuses : ["submitted", "approved", "admitted", "deferred", "rejected", "closed", "deleted"],
       typeId,
       from: isoDate(one(p.from)),
       to: isoDate(one(p.to)),
@@ -185,7 +188,8 @@ export async function runApplicationsReport(f: ApplicationFilters) {
     .groupBy(schema.applicationSponsors.applicationId)
     .as("spons");
 
-  const where: SQL[] = [inArray(a.status, f.statuses as (typeof a.status.enumValues)[number][])];
+  const live = f.statuses.filter((st) => st !== "deleted") as (typeof a.status.enumValues)[number][];
+  const where: SQL[] = [live.length ? inArray(a.status, live) : sql`false`];
   if (f.typeId) where.push(eq(a.membershipTypeId, f.typeId));
   if (f.from) where.push(gte(a.receivedAt, new Date(`${f.from}T00:00:00+04:00`)));
   if (f.to) where.push(lte(a.receivedAt, new Date(`${f.to}T23:59:59+04:00`)));
@@ -196,7 +200,7 @@ export async function runApplicationsReport(f: ApplicationFilters) {
     );
   }
 
-  return db
+  const liveRows = await db
     .select({
       id: a.id,
       reference: a.reference,
@@ -217,6 +221,7 @@ export async function runApplicationsReport(f: ApplicationFilters) {
       sponsorsConfirmed: sponsors.confirmed,
       paymentDueAt: a.paymentDueAt,
       admittedAt: a.admittedAt,
+      closedFrom: a.closedFromStatus,
     })
     .from(a)
     .innerJoin(schema.accounts, eq(schema.accounts.id, a.accountId))
@@ -227,9 +232,76 @@ export async function runApplicationsReport(f: ApplicationFilters) {
     .where(and(...where))
     .orderBy(desc(sql`coalesce(${a.decidedAt}, ${a.receivedAt}, ${a.createdAt})`))
     .limit(5000);
+  const rows: ApplicationRow[] = liveRows.map((row) => ({ ...row, status: row.status as string }));
+  if (f.statuses.includes("deleted")) rows.push(...(await deletedApplicationRows(f)));
+  const when = (row: ApplicationRow) => (row.decidedAt ?? row.receivedAt)?.getTime() ?? 0;
+  return rows.sort((x, y) => when(y) - when(x));
 }
 
-export type ApplicationRow = Awaited<ReturnType<typeof runApplicationsReport>>[number];
+export type ApplicationRow = {
+  id: string;
+  reference: string;
+  lastName: string | null;
+  firstNames: string | null;
+  email: string | null;
+  mobile: string | null;
+  typeName: string | null;
+  /** An application status, or "deleted" for the record of a deleted application (ADM-06). */
+  status: string;
+  receivedAt: Date | null;
+  submissions: number;
+  decidedAt: Date | null;
+  decidedBy: string | null;
+  decisionComment: string | null;
+  compliance: string | null;
+  kycVerified: number | null;
+  sponsorsTotal: number | null;
+  sponsorsConfirmed: number | null;
+  paymentDueAt: Date | null;
+  admittedAt: Date | null;
+  /** For closed and deleted applications: whether it had been deferred or rejected. */
+  closedFrom: string | null;
+};
+
+/** ADM-06: records of deleted applications — name, outcome and reason, kept for at least 18 months. */
+async function deletedApplicationRows(f: ApplicationFilters): Promise<ApplicationRow[]> {
+  const db = getDb();
+  const r = schema.applicationRecords;
+  const where: SQL[] = [];
+  if (f.typeId) {
+    const [t] = await db.select({ name: schema.membershipTypes.name }).from(schema.membershipTypes).where(eq(schema.membershipTypes.id, f.typeId)).limit(1);
+    where.push(eq(r.membershipTypeName, t?.name ?? ""));
+  }
+  if (f.from) where.push(gte(r.receivedAt, new Date(`${f.from}T00:00:00+04:00`)));
+  if (f.to) where.push(lte(r.receivedAt, new Date(`${f.to}T23:59:59+04:00`)));
+  if (f.q) {
+    const like = `%${f.q}%`;
+    where.push(or(ilike(r.reference, like), ilike(r.lastName, like), ilike(r.firstNames, like))!);
+  }
+  const recs = await db.select().from(r).where(where.length ? and(...where) : undefined).limit(5000);
+  return recs.map((rec) => ({
+    id: rec.id,
+    reference: rec.reference,
+    lastName: rec.lastName,
+    firstNames: rec.firstNames,
+    email: null,
+    mobile: null,
+    typeName: rec.membershipTypeName,
+    status: "deleted",
+    receivedAt: rec.receivedAt,
+    submissions: 0,
+    decidedAt: rec.decidedAt,
+    decidedBy: rec.decidedByName,
+    decisionComment: rec.reason,
+    compliance: null,
+    kycVerified: null,
+    sponsorsTotal: null,
+    sponsorsConfirmed: null,
+    paymentDueAt: null,
+    admittedAt: null,
+    closedFrom: rec.outcome,
+  }));
+}
 
 /* ------------------------------------------------------------------ */
 /* Members report                                                       */
@@ -288,7 +360,7 @@ export type MemberRow = Awaited<ReturnType<typeof runMembersReport>>[number];
 
 export async function headlineFigures() {
   const db = getDb();
-  const [apps, members, tenure] = await Promise.all([
+  const [apps, members, tenure, records] = await Promise.all([
     db
       .select({ status: schema.applications.status, n: sql<number>`count(*)::int` })
       .from(schema.applications)
@@ -305,6 +377,7 @@ export async function headlineFigures() {
       })
       .from(schema.members)
       .where(eq(schema.members.status, "active")),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.applicationRecords),
   ]);
   const a = (k: string) => apps.find((r) => r.status === k)?.n ?? 0;
   const mm = (k: string) => members.find((r) => r.status === k)?.n ?? 0;
@@ -315,6 +388,7 @@ export async function headlineFigures() {
     admitted: a("admitted"),
     deferred: a("deferred"),
     rejected: a("rejected"),
+    closedOrDeleted: a("closed") + (records[0]?.n ?? 0),
     m12: tenure[0]?.m12 ?? 0,
     m24: tenure[0]?.m24 ?? 0,
     m36: tenure[0]?.m36 ?? 0,

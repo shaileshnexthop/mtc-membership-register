@@ -256,7 +256,7 @@ export async function addObservation(applicationId: string, _prev: FormState, fd
 }
 
 /* ------------------------------------------------------------------ */
-/* Administrator override: reopen a rejected application               */
+/* Administrator override: reopen a rejected or closed application     */
 /* ------------------------------------------------------------------ */
 
 /**
@@ -272,7 +272,10 @@ export async function reopenApplication(applicationId: string, _prev: FormState,
   if (reason.length < 5) return { error: "Give the reason for reopening. It is kept in the history.", values: { reason } };
 
   const app = await loadApp(applicationId);
-  if (!app || app.status !== "rejected") return { error: "Only a rejected application can be reopened." };
+  // ADM-06: a closed application can also be reopened until it is deleted.
+  if (!app || (app.status !== "rejected" && app.status !== "closed"))
+    return { error: "Only a rejected or closed application can be reopened." };
+  const fromStatus = app.status;
 
   const db = getDb();
   const [otherOpen] = await db
@@ -289,23 +292,31 @@ export async function reopenApplication(applicationId: string, _prev: FormState,
 
   const toStatus = mode === "review" ? "submitted" : "deferred";
   const now = new Date();
-  await db
+  const updated = await db
     .update(schema.applications)
     .set({
       status: toStatus,
       decisionComment: mode === "edit" ? reason : app.decisionComment,
+      // Returned to the applicant: this is a new deferral, so the closing period starts again (ADM-06).
+      ...(mode === "edit" ? { decidedAt: now, decidedById: staff.id } : {}),
+      closedAt: null,
+      closedFromStatus: null,
+      closureWarnedAt: null,
       updatedAt: now,
     })
-    .where(and(eq(schema.applications.id, app.id), eq(schema.applications.status, "rejected")));
+    .where(and(eq(schema.applications.id, app.id), eq(schema.applications.status, fromStatus)))
+    .returning({ id: schema.applications.id });
+  if (!updated.length) return { error: "The application changed meanwhile. Reload the page." };
+  const what = fromStatus === "closed" ? "Closure" : "Rejection";
   await db.insert(schema.applicationEvents).values({
     applicationId: app.id,
     actorType: "staff",
     staffUserId: staff.id,
     eventType: "reopened",
-    subject: mode === "review" ? "Rejection overridden – back to review" : "Rejection overridden – returned to applicant",
+    subject: mode === "review" ? `${what} overridden – back to review` : `${what} overridden – returned to applicant`,
     comment: `By ${staff.displayName} (Administrator): ${reason}`,
     internal: mode === "review",
-    fromStatus: "rejected",
+    fromStatus,
     toStatus,
   });
   await audit({
@@ -315,7 +326,7 @@ export async function reopenApplication(applicationId: string, _prev: FormState,
     entityId: app.id,
     staffUserId: staff.id,
     ip: await clientIp(),
-    details: { mode, reason },
+    details: { mode, reason, from: fromStatus },
   });
 
   if (mode === "edit") {

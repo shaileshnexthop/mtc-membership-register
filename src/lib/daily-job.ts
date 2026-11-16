@@ -15,9 +15,10 @@ import {
   renewalReminderEmail,
   upgradeRequestedStaffEmail,
 } from "./email-templates";
+import { closeStaleApplications, deleteClosedApplications, purgeExpiredRecords, sendClosureWarnings } from "./application-retention";
 
 /**
- * The scheduled job (PAY-05, PAY-06, UPG-07, REN-04). Runs every hour from the
+ * The scheduled job (PAY-05, PAY-06, UPG-07, REN-04, ADM-06). Runs every hour from the
  * `scheduler` container and is safe to run any number of times: each step checks
  * what has already been done. Reminder emails go out only in office hours (08:00–18:00).
  */
@@ -31,6 +32,11 @@ export async function runDailyJob(now = new Date()) {
     renewalReminders: officeHours ? await sendRenewalReminders(now) : 0,
     renewalDue: await markRenewalDue(),
     lapsed: officeHours ? await lapseAfterGrace() : 0,
+    // ADM-06: warn, close (both email the applicant, so office hours), then delete and purge.
+    closureWarnings: officeHours ? await sendClosureWarnings(now) : 0,
+    closed: officeHours ? await closeStaleApplications(now) : 0,
+    deleted: await deleteClosedApplications(now),
+    recordsPurged: await purgeExpiredRecords(now),
   };
   return summary;
 }

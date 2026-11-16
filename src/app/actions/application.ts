@@ -339,7 +339,9 @@ export async function startApplication(): Promise<void> {
   if (!account) redirect("/connexion");
   const existing = await getApplicationForAccount(account.id);
   // A rejected application is final; whether a new one may follow is an open item for MTC.
-  if (existing && !isEditable(existing.status)) redirect("/candidature");
-  if (!existing) await createDraft(account.id);
+  // A closed one (ADM-06) is finished, so a new application may be started.
+  const closed = existing?.status === "closed";
+  if (existing && !closed && !isEditable(existing.status)) redirect("/candidature");
+  if (!existing || closed) await createDraft(account.id);
   redirect("/candidature/informations");
 }

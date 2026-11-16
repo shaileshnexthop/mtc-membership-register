@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { addHoliday, deleteHoliday, saveMembershipType, savePaymentSettings } from "@/app/actions/settings";
+import { addHoliday, deleteHoliday, saveMembershipType, savePaymentSettings, saveRetentionSettings } from "@/app/actions/settings";
 import type { FormState } from "@/app/actions/auth";
 import ui from "./ui.module.css";
 import s from "./staff.module.css";
@@ -150,14 +150,42 @@ const PAYMENT_FIELDS: { key: string; label: string; hint: string }[] = [
   { key: "payment_bank_account", label: "Account number (Numéro de compte)", hint: "" },
 ];
 
+const RETENTION_FIELDS: { key: string; label: string; hint: string }[] = [
+  { key: "application_close_after_days", label: "Close deferred and rejected applications after", hint: "days after the decision" },
+  { key: "application_close_warning_days", label: "Warn the applicant", hint: "days before closing a deferred one; 0 = no warning" },
+  { key: "application_delete_after_days", label: "Delete closed applications after", hint: "days after closing, with the KYC documents" },
+  { key: "application_record_retention_months", label: "Keep name, outcome and reason in Reports for", hint: "months after deletion; at least 18" },
+];
+
+type Fields = { key: string; label: string; hint: string }[];
+
 /** ADM-03: deadlines, reminder intervals and bank details. */
 export function PaymentSettingsForm({ initial, canEdit }: { initial: Record<string, string>; canEdit: boolean }) {
-  const [state, action, pending] = useCountedAction(savePaymentSettings);
+  return <KeyedSettingsForm fields={PAYMENT_FIELDS} fn={savePaymentSettings} initial={initial} canEdit={canEdit} />;
+}
+
+/** ADM-06: closing and deleting applications that go nowhere. */
+export function RetentionSettingsForm({ initial, canEdit }: { initial: Record<string, string>; canEdit: boolean }) {
+  return <KeyedSettingsForm fields={RETENTION_FIELDS} fn={saveRetentionSettings} initial={initial} canEdit={canEdit} />;
+}
+
+function KeyedSettingsForm({
+  fields,
+  fn,
+  initial,
+  canEdit,
+}: {
+  fields: Fields;
+  fn: (prev: FormState, fd: FormData) => Promise<FormState>;
+  initial: Record<string, string>;
+  canEdit: boolean;
+}) {
+  const [state, action, pending] = useCountedAction(fn);
   return (
     <form key={state.n ?? 0} action={action} className={ui.form} style={{ gap: 14 }}>
       <Feedback state={state} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 14 }}>
-        {PAYMENT_FIELDS.map((f) => (
+        {fields.map((f) => (
           <div key={f.key} className={ui.field}>
             <label htmlFor={f.key} className={ui.label}>
               {f.label} {f.hint ? <span className={ui.hint}>({f.hint})</span> : null}

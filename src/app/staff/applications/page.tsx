@@ -6,6 +6,7 @@ import { StaffShell } from "@/components/StaffShell";
 import { requireStaffPage } from "@/lib/staff";
 import { formatDateEn } from "@/lib/format";
 import { STATUS_EN } from "@/lib/staff-labels";
+import { closesOn, deletesOn, retentionRules } from "@/lib/application-retention";
 import s from "@/components/staff.module.css";
 
 export const metadata: Metadata = { title: "Applications" };
@@ -17,6 +18,7 @@ const FILTERS = [
   { key: "admitted", label: "Admitted" },
   { key: "rejected", label: "Rejected" },
   { key: "draft", label: "Drafts" },
+  { key: "closed", label: "Closed" },
 ] as const;
 
 /** REV-01: the queue of applications, filterable by status. */
@@ -67,6 +69,9 @@ export default async function ApplicationsQueue({
       submissionCount: schema.applications.submissionCount,
       compliance: schema.applications.complianceStatus,
       paymentDueAt: schema.applications.paymentDueAt,
+      decidedAt: schema.applications.decidedAt,
+      updatedAt: schema.applications.updatedAt,
+      closedAt: schema.applications.closedAt,
       typeName: schema.membershipTypes.name,
       verified: verifiedDocs.verified,
       sponsorsTotal: sponsorCounts.total,
@@ -79,6 +84,7 @@ export default async function ApplicationsQueue({
     .where(eq(schema.applications.status, status))
     .orderBy(status === "submitted" ? asc(schema.applications.lastSubmittedAt) : desc(schema.applications.updatedAt))
     .limit(200);
+  const rules = await retentionRules();
 
   return (
     <StaffShell staff={staff} active="applications">
@@ -146,6 +152,12 @@ export default async function ApplicationsQueue({
                       </span>
                       {r.status === "approved" && r.paymentDueAt ? (
                         <span className={s.note}> due {formatDateEn(r.paymentDueAt)}</span>
+                      ) : null}
+                      {r.status === "deferred" || r.status === "rejected" ? (
+                        <span className={s.note}> closes {formatDateEn(closesOn(r, rules))}</span>
+                      ) : null}
+                      {r.status === "closed" && r.closedAt ? (
+                        <span className={s.note}> deleted {formatDateEn(deletesOn(r.closedAt, rules))}</span>
                       ) : null}
                     </td>
                   </tr>

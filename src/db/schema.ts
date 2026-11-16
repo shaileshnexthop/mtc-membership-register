@@ -60,6 +60,7 @@ export const applicationStatus = pgEnum("application_status", [
   "rejected",
   "approved", // awaiting MIPS payment
   "admitted", // paid; member record created
+  "closed", // deferred or rejected too long; deleted after a further period (ADM-06)
 ]);
 
 export const complianceStatus = pgEnum("compliance_status", [
@@ -331,6 +332,12 @@ export const applications = pgTable(
     paymentDueAt: ts("payment_due_at"),
     admittedAt: ts("admitted_at"), // Admis comme Membre le
 
+    // ADM-06: a deferred or rejected application is closed after a set period,
+    // then deleted (with its KYC files) after a further period.
+    closureWarnedAt: ts("closure_warned_at"),
+    closedAt: ts("closed_at"),
+    closedFromStatus: applicationStatus("closed_from_status"),
+
     createdAt: createdAt(),
     updatedAt: ts("updated_at").notNull().defaultNow(),
   },
@@ -342,6 +349,34 @@ export const applications = pgTable(
     uniqueIndex("applications_one_open_per_account_uq")
       .on(t.accountId)
       .where(sql`${t.status} in ('draft', 'submitted', 'deferred', 'approved')`),
+  ],
+);
+
+/**
+ * ADM-06: what remains of a deleted application, for reports — the name, the
+ * outcome and its reason — kept until `retainUntil` (at least 18 months), then purged.
+ * `id` is the deleted application's id, so old links and audit entries still resolve.
+ */
+export const applicationRecords = pgTable(
+  "application_records",
+  {
+    id: uuid("id").primaryKey(),
+    reference: text("reference").notNull(),
+    lastName: text("last_name"),
+    firstNames: text("first_names"),
+    membershipTypeName: text("membership_type_name"),
+    outcome: applicationStatus("outcome").notNull(), // deferred or rejected
+    reason: text("reason"),
+    receivedAt: ts("received_at"),
+    decidedAt: ts("decided_at"),
+    decidedByName: text("decided_by_name"),
+    closedAt: ts("closed_at"),
+    deletedAt: ts("deleted_at").notNull().defaultNow(),
+    retainUntil: date("retain_until").notNull(),
+  },
+  (t) => [
+    uniqueIndex("application_records_reference_uq").on(t.reference),
+    index("application_records_retain_idx").on(t.retainUntil),
   ],
 );
 

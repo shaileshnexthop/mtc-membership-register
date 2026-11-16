@@ -16,6 +16,7 @@ import {
 } from "@/lib/applications";
 import { formatDateFr, formatDateTimeFr, formatMur } from "@/lib/format";
 import { getBankDetails } from "@/lib/settings";
+import { closesOn, deletesOn, retentionRules } from "@/lib/application-retention";
 import ui from "@/components/ui.module.css";
 import s from "@/components/application.module.css";
 
@@ -28,6 +29,7 @@ const STATUS_PILL: Record<string, string> = {
   rejected: s.pillBad,
   approved: s.pillOk,
   admitted: s.pillOk,
+  closed: s.pillMuted,
 };
 
 /** APP-09: the applicant follows the status of the application here. */
@@ -71,6 +73,7 @@ export default async function ApplicationOverview({
       .orderBy(desc(schema.applicationEvents.at)),
   ]);
   const editable = isEditable(app.status);
+  const rules = app.status === "deferred" || app.status === "closed" ? await retentionRules() : null;
   const bank = app.status === "approved" ? await getBankDetails() : null;
   const [type] = app.membershipTypeId
     ? await getDb().select().from(schema.membershipTypes).where(eq(schema.membershipTypes.id, app.membershipTypeId)).limit(1)
@@ -113,6 +116,28 @@ export default async function ApplicationOverview({
           {(app.status === "deferred" || app.status === "rejected") && app.decisionComment ? (
             <div className={app.status === "rejected" ? ui.alertError : ui.alertInfo} style={{ marginTop: 16 }}>
               <strong>Commentaire du Club :</strong> {app.decisionComment}
+            </div>
+          ) : null}
+
+          {app.status === "deferred" && rules ? (
+            <p className={s.small} style={{ marginTop: 12 }}>
+              Sans nouvelle soumission de votre part, cette candidature sera clôturée le{" "}
+              <strong>{formatDateFr(closesOn(app, rules))}</strong>, puis supprimée avec vos documents{" "}
+              {rules.deleteAfterDays} jours plus tard.
+            </p>
+          ) : null}
+
+          {app.status === "closed" && rules && app.closedAt ? (
+            <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div className={ui.alertInfo}>
+                Cette candidature a été clôturée le {formatDateFr(app.closedAt)}. Le dossier et les documents
+                déposés seront définitivement supprimés le <strong>{formatDateFr(deletesOn(app.closedAt, rules))}</strong>.
+              </div>
+              <form action={startApplication}>
+                <button type="submit" className={ui.primary}>
+                  Déposer une nouvelle candidature
+                </button>
+              </form>
             </div>
           ) : null}
 

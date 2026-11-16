@@ -75,6 +75,7 @@ export const STATUS_LABELS_FR: Record<ApplicationStatus, string> = {
   rejected: "Refusée",
   approved: "Approuvée – en attente de paiement",
   admitted: "Admis(e) comme membre",
+  closed: "Clôturée",
 };
 
 /** The account's current application: the open one, else the most recent. */

@@ -6,7 +6,7 @@ import { getDb, schema } from "@/db";
 import { requireStaffAction } from "@/lib/staff";
 import { audit } from "@/lib/audit";
 import { clientIp } from "@/lib/request";
-import { PAYMENT_SETTING_KEYS } from "@/lib/settings-keys";
+import { PAYMENT_SETTING_KEYS, RETENTION_SETTING_KEYS } from "@/lib/settings-keys";
 import type { FormState } from "./auth";
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? "").trim();
@@ -145,31 +145,59 @@ export async function savePaymentSettings(_prev: FormState, fd: FormData): Promi
     payment_bank_holder: values.payment_bank_holder,
     payment_bank_account: values.payment_bank_account,
   };
+  const n = await persistSettings(next, staff.id, "/staff/settings/payments");
+  if (!n) return { message: "No changes to save.", values };
+  return { message: `Saved ${n} change${n > 1 ? "s" : ""}. New deadlines apply to approvals from now on.`, values };
+}
+
+/** Saves the changed keys and records each change, old and new value, in the audit log. Returns how many changed. */
+async function persistSettings(next: Record<string, unknown>, staffId: string, path: string): Promise<number> {
   const db = getDb();
-  const before = await db.select().from(schema.settings).where(inArray(schema.settings.key, [...PAYMENT_SETTING_KEYS]));
+  const before = await db.select().from(schema.settings).where(inArray(schema.settings.key, Object.keys(next)));
   const prev = Object.fromEntries(before.map((r) => [r.key, r.value]));
   const changed = Object.fromEntries(
     Object.entries(next)
       .filter(([k, v]) => JSON.stringify(prev[k]) !== JSON.stringify(v))
       .map(([k, v]) => [k, { from: prev[k] ?? null, to: v }]),
   );
-  if (!Object.keys(changed).length) return { message: "No changes to save.", values };
+  if (!Object.keys(changed).length) return 0;
   for (const k of Object.keys(changed)) {
     await db
       .insert(schema.settings)
-      .values({ key: k, value: next[k], updatedByStaffId: staff.id })
-      .onConflictDoUpdate({ target: schema.settings.key, set: { value: next[k], updatedAt: new Date(), updatedByStaffId: staff.id } });
+      .values({ key: k, value: next[k], updatedByStaffId: staffId })
+      .onConflictDoUpdate({ target: schema.settings.key, set: { value: next[k], updatedAt: new Date(), updatedByStaffId: staffId } });
   }
   await audit({
     actorType: "staff",
     action: "settings.updated",
     entityType: "settings",
-    staffUserId: staff.id,
+    staffUserId: staffId,
     ip: await clientIp(),
     details: changed,
   });
-  revalidatePath("/staff/settings/payments");
-  return { message: `Saved ${Object.keys(changed).length} change${Object.keys(changed).length > 1 ? "s" : ""}. New deadlines apply to approvals from now on.`, values };
+  revalidatePath(path);
+  return Object.keys(changed).length;
+}
+
+/** ADM-06: when deferred and rejected applications are closed and deleted, and how long their record is kept. */
+export async function saveRetentionSettings(_prev: FormState, fd: FormData): Promise<FormState> {
+  const staff = await requireStaffAction("administrator");
+  const values = Object.fromEntries(RETENTION_SETTING_KEYS.map((k) => [k, str(fd, k)])) as Record<string, string>;
+  const fieldErrors: Record<string, string> = {};
+  const intIn = (k: string, lo: number, hi: number, msg?: string) => {
+    const n = Number(values[k]);
+    if (values[k] === "" || !Number.isInteger(n) || n < lo || n > hi) fieldErrors[k] = msg ?? `A whole number from ${lo} to ${hi}.`;
+    return n;
+  };
+  const close = intIn("application_close_after_days", 14, 365);
+  intIn("application_close_warning_days", 0, Math.max(0, Math.min(60, close - 1)), `A whole number from 0 (no warning) to ${Math.max(0, Math.min(60, close - 1))}.`);
+  intIn("application_delete_after_days", 1, 365);
+  intIn("application_record_retention_months", 18, 120, "At least 18 months, at most 120.");
+  if (Object.keys(fieldErrors).length) return { error: "Check the highlighted fields.", fieldErrors, values };
+  const next = Object.fromEntries(RETENTION_SETTING_KEYS.map((k) => [k, Number(values[k])]));
+  const n = await persistSettings(next, staff.id, "/staff/settings/retention");
+  if (!n) return { message: "No changes to save.", values };
+  return { message: `Saved ${n} change${n > 1 ? "s" : ""}. The scheduled check uses them from its next run.`, values };
 }
 
 /** ADM-02: public holidays used for business-day deadlines. */

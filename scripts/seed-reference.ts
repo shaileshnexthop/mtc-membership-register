@@ -31,6 +31,11 @@ const settings: Record<string, unknown> = {
   upgrade_reminder_business_days: 3,
   renewal_reminder_days_before: [30, 14, 7, 0],
   renewal_grace_days: 30,
+  // ADM-06: deferred/rejected applications are closed, then deleted; a record is kept for reports.
+  application_close_after_days: 60,
+  application_close_warning_days: 14,
+  application_delete_after_days: 30,
+  application_record_retention_months: 18,
   verification_link_hours: 24,
   unverified_account_delete_days: 30,
   proof_of_address_max_age_months: 3,

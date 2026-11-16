@@ -6,6 +6,8 @@ export const STATUS_EN: Record<string, [string, "pillIdle" | "pillInfo" | "pillW
   rejected: ["Rejected", "pillBad"],
   approved: ["Approved · awaiting payment", "pillOk"],
   admitted: ["Admitted", "pillOk"],
+  closed: ["Closed · to be deleted", "pillIdle"],
+  deleted: ["Deleted · record kept", "pillIdle"],
 };
 
 /** KYC document kinds, in English for staff pages. */

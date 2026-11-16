@@ -72,6 +72,7 @@ export default async function ReportsPage({
     },
     { label: "Deferred applications", value: figures.deferred, href: PRESETS[5].href, tone: r.tWarn },
     { label: "Rejected applications", value: figures.rejected, href: PRESETS[6].href, tone: r.tBad },
+    { label: "Closed and deleted", value: figures.closedOrDeleted, href: PRESETS[8].href, tone: r.tInfo },
   ];
 
   return (
@@ -330,7 +331,7 @@ function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
                   {row.lastName ?? "—"}
                   {row.firstNames ? `, ${row.firstNames}` : ""}
                 </strong>
-                <span className={r.sub}>{row.email}</span>
+                {row.email ? <span className={r.sub}>{row.email}</span> : null}
                 {row.mobile ? <span className={r.sub}>{row.mobile}</span> : null}
               </td>
               <td>{row.typeName ?? "—"}</td>
@@ -343,6 +344,9 @@ function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
                 {row.status === "admitted" && row.admittedAt ? (
                   <span className={r.sub}>admitted {formatDateEn(row.admittedAt)}</span>
                 ) : null}
+                {row.closedFrom && (row.status === "closed" || row.status === "deleted") ? (
+                  <span className={r.sub}>was {row.closedFrom}</span>
+                ) : null}
               </td>
               <td className={s.nowrap}>
                 {row.decidedAt ? formatDateEn(row.decidedAt) : "—"}
@@ -350,6 +354,10 @@ function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
               </td>
               <td className={r.comment}>{row.decisionComment || "—"}</td>
               <td className={s.nowrap}>
+                {row.status === "deleted" ? (
+                  <span className={r.sub}>Deleted with the application</span>
+                ) : (
+                  <>
                 <span className={r.sub}>KYC {Number(row.kycVerified ?? 0)}/4</span>
                 <span className={r.sub}>
                   Sponsors {Number(row.sponsorsConfirmed ?? 0)}/{Number(row.sponsorsTotal ?? 0)}
@@ -358,6 +366,8 @@ function ApplicationsTable({ rows }: { rows: ApplicationRow[] }) {
                   Compliance{" "}
                   {row.compliance === "cleared" ? "cleared" : row.compliance === "not_cleared" ? "not cleared" : "pending"}
                 </span>
+                  </>
+                )}
               </td>
             </tr>
           ))}

@@ -11,6 +11,8 @@ import { hasRole, requireStaffPage } from "@/lib/staff";
 import { DOCUMENT_REQUIREMENTS, monthsSince } from "@/lib/applications";
 import { formatDateEn, formatDateTimeEn, formatSizeEn } from "@/lib/format";
 import { DOC_EN, STATUS_EN } from "@/lib/staff-labels";
+import { closesOn, deletesOn, retentionRules } from "@/lib/application-retention";
+import type { Staff } from "@/lib/staff";
 import s from "@/components/staff.module.css";
 import ui from "@/components/ui.module.css";
 
@@ -24,7 +26,13 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
   const db = getDb();
 
   const [app] = await db.select().from(schema.applications).where(eq(schema.applications.id, id)).limit(1);
-  if (!app) notFound();
+  if (!app) {
+    // ADM-06: a deleted application leaves a record for reports; old links show it.
+    const [rec] = await db.select().from(schema.applicationRecords).where(eq(schema.applicationRecords.id, id)).limit(1);
+    if (!rec) notFound();
+    return <DeletedApplication staff={staff} rec={rec} />;
+  }
+  const rules = await retentionRules();
 
   const [account, type, sponsors, docs, events, staffList] = await Promise.all([
     db.select().from(schema.accounts).where(eq(schema.accounts.id, app.accountId)).limit(1).then((r) => r[0]),
@@ -314,7 +322,24 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                   ? "The applicant has not submitted this application yet."
                   : `${STATUS_EN[app.status][0]}${app.decidedAt ? ` by ${staffName(app.decidedById)}, ${formatDateTimeEn(app.decidedAt)}` : ""}${app.decisionComment ? ` — “${app.decisionComment}”` : ""}${app.status === "approved" && app.paymentDueAt ? `. Payment due by ${formatDateEn(app.paymentDueAt)}.` : ""}`}
               </p>
-              {app.status === "rejected" && hasRole(staff, "administrator") ? <ReopenForm applicationId={app.id} /> : null}
+              {app.status === "deferred" || app.status === "rejected" ? (
+                <p className={s.note} style={{ margin: 0 }}>
+                  Closes automatically on {formatDateEn(closesOn(app, rules))}
+                  {app.status === "deferred" ? " unless the applicant resubmits" : ""}; deleted {rules.deleteAfterDays} days
+                  after closing.
+                </p>
+              ) : null}
+              {app.status === "closed" && app.closedAt ? (
+                <p className={s.note} style={{ margin: 0 }}>
+                  Closed {formatDateEn(app.closedAt)}
+                  {app.closedFromStatus ? ` after being ${STATUS_EN[app.closedFromStatus][0].toLowerCase()}` : ""}. The application
+                  and its KYC documents will be deleted on <strong>{formatDateEn(deletesOn(app.closedAt, rules))}</strong>; the
+                  name, outcome and reason stay in Reports for {rules.keepRecordMonths} months.
+                </p>
+              ) : null}
+              {(app.status === "rejected" || app.status === "closed") && hasRole(staff, "administrator") ? (
+                <ReopenForm applicationId={app.id} closed={app.status === "closed"} />
+              ) : null}
               </>
             )}
           </section>
@@ -408,6 +433,51 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
           </section>
         </div>
       </div>
+    </StaffShell>
+  );
+}
+
+/** ADM-06: what is left of a deleted application. */
+function DeletedApplication({ staff, rec }: { staff: Staff; rec: typeof schema.applicationRecords.$inferSelect }) {
+  return (
+    <StaffShell staff={staff} active="applications">
+      <span className={s.crumb}>
+        <Link href="/staff/applications">Applications</Link> / {rec.reference}
+      </span>
+      <div className={s.titleRow}>
+        <h1 className={s.title}>
+          {rec.firstNames} {rec.lastName}
+        </h1>
+        <span className={`${s.pill} ${s.pillIdle}`}>Deleted · record kept</span>
+      </div>
+      <section className={s.card} aria-labelledby="h-record">
+        <h2 id="h-record" className={s.cardTitle}>
+          Retained record
+        </h2>
+        <p className={s.note} style={{ margin: 0 }}>
+          This application was closed and then deleted on {formatDateEn(rec.deletedAt)}, with its form, sponsors, history and
+          KYC documents. Only the details below are kept, for reports, until {formatDateEn(rec.retainUntil)}. The audit log
+          still lists every action taken on it.
+        </p>
+        <dl className={s.dl}>
+          <dt>Reference</dt>
+          <dd>{rec.reference}</dd>
+          <dt>Membership type</dt>
+          <dd>{rec.membershipTypeName ?? "—"}</dd>
+          <dt>Received</dt>
+          <dd>{rec.receivedAt ? formatDateEn(rec.receivedAt) : "—"}</dd>
+          <dt>Outcome</dt>
+          <dd>
+            {rec.outcome === "rejected" ? "Rejected" : "Deferred"}
+            {rec.decidedAt ? ` on ${formatDateEn(rec.decidedAt)}` : ""}
+            {rec.decidedByName ? ` by ${rec.decidedByName}` : ""}
+          </dd>
+          <dt>Reason</dt>
+          <dd>{rec.reason || "—"}</dd>
+          <dt>Closed</dt>
+          <dd>{rec.closedAt ? formatDateEn(rec.closedAt) : "—"}</dd>
+        </dl>
+      </section>
     </StaffShell>
   );
 }

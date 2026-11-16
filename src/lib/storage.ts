@@ -1,7 +1,7 @@
 import "server-only";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { storageConfig } from "./config";
 
 /**
@@ -58,4 +58,14 @@ export async function getObject(key: string): Promise<Buffer> {
     return Buffer.from(bytes);
   }
   return readFile(safeLocalPath(key));
+}
+
+/** Permanently removes a stored document (ADM-06). Removing one that is already gone is not an error. */
+export async function deleteObject(key: string): Promise<void> {
+  const c = s3();
+  if (c) {
+    await c.send(new DeleteObjectCommand({ Bucket: storageConfig().bucket, Key: key }));
+    return;
+  }
+  await rm(safeLocalPath(key), { force: true });
 }

@@ -410,3 +410,35 @@ ${kv([
   const text = `Bonjour ${p.name},\n\nVotre cotisation (${p.typeName}) de ${p.feeLabel} arrive à échéance ${when}.\nRégler en ligne : ${p.link}\nOu par virement : ${p.bankName}, ${p.accountHolder}, compte ${p.accountNumber}, référence ${p.memberNumber}.`;
   return { subject, html, text };
 }
+
+/* ------------------------------------------------------------------ */
+/* ADM-06: closing a deferred application that was not resubmitted     */
+/* ------------------------------------------------------------------ */
+
+export function applicationClosureWarningEmail(p: { name: string; reference: string; closesOn: string; deleteAfterDays: number; link: string }) {
+  const subject = `Candidature ${p.reference} – clôture prochaine`;
+  const html = layout(
+    "Votre candidature sera bientôt clôturée",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Votre candidature <strong>${esc(p.reference)}</strong> est différée et n’a pas été soumise à nouveau.</p>
+<p>Sans nouvelle soumission de votre part, elle sera clôturée le <strong>${esc(p.closesOn)}</strong>. ${p.deleteAfterDays} jours après sa clôture, votre dossier et les documents déposés seront définitivement supprimés.</p>
+<p>Pour poursuivre votre demande, complétez votre dossier et soumettez-le à nouveau depuis votre espace.</p>
+${button(p.link, "Reprendre ma candidature")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference} est différée et n’a pas été soumise à nouveau. Sans nouvelle soumission, elle sera clôturée le ${p.closesOn}, puis supprimée avec vos documents ${p.deleteAfterDays} jours plus tard.\n\nReprendre votre candidature : ${p.link}`;
+  return { subject, html, text };
+}
+
+export function applicationClosedEmail(p: { name: string; reference: string; deletesOn: string; link: string }) {
+  const subject = `Candidature ${p.reference} clôturée – Mauritius Turf Club`;
+  const html = layout(
+    "Votre candidature a été clôturée",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Votre candidature <strong>${esc(p.reference)}</strong>, différée et non soumise à nouveau, a été clôturée.</p>
+<p>Votre dossier et les documents déposés seront définitivement supprimés le <strong>${esc(p.deletesOn)}</strong>.</p>
+<p>Vous pouvez à tout moment déposer une nouvelle candidature depuis votre espace.</p>
+${button(p.link, "Mon espace")}`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre candidature ${p.reference}, différée et non soumise à nouveau, a été clôturée. Votre dossier et vos documents seront supprimés le ${p.deletesOn}.\n\nVous pouvez déposer une nouvelle candidature : ${p.link}`;
+  return { subject, html, text };
+}

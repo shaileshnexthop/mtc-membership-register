@@ -2,7 +2,7 @@ import Link from "next/link";
 import { hasRole, type Staff } from "@/lib/staff";
 import s from "./staff.module.css";
 
-export type SettingsTab = "types" | "payments" | "holidays" | "staff" | "import" | "audit";
+export type SettingsTab = "types" | "payments" | "retention" | "holidays" | "staff" | "import" | "audit";
 
 /** Sub-navigation for Settings. Import and Audit log are for the Administrator only. */
 export function SettingsTabs({ staff, active }: { staff: Staff; active: SettingsTab }) {
@@ -10,6 +10,7 @@ export function SettingsTabs({ staff, active }: { staff: Staff; active: Settings
   const tabs: { key: SettingsTab; label: string; href: string; adminOnly?: boolean }[] = [
     { key: "types", label: "Membership types", href: "/staff/settings" },
     { key: "payments", label: "Payments & renewals", href: "/staff/settings/payments" },
+    { key: "retention", label: "Data retention", href: "/staff/settings/retention" },
     { key: "holidays", label: "Public holidays", href: "/staff/settings/holidays" },
     { key: "staff", label: "Staff & roles", href: "/staff/settings/staff" },
     { key: "import", label: "Import register", href: "/staff/settings/import", adminOnly: true },

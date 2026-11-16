@@ -250,7 +250,7 @@ export function PaymentForm({
   );
 }
 
-export function ReopenForm({ applicationId }: { applicationId: string }) {
+export function ReopenForm({ applicationId, closed = false }: { applicationId: string; closed?: boolean }) {
   const [state, action, pending] = useActionState(reopenApplication.bind(null, applicationId), {});
   const [open, setOpen] = useState(false);
   if (state.message) return <Feedback state={state} />;
@@ -268,12 +268,12 @@ export function ReopenForm({ applicationId }: { applicationId: string }) {
           Reopen to
         </legend>
         <label className={s.note} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-          <input type="radio" name="mode" value="review" /> Back to review — the rejection was a mistake; staff review
-          it again.
+          <input type="radio" name="mode" value="review" /> Back to review —{" "}
+          {closed ? "it should not have been closed" : "the rejection was a mistake"}; staff review it again.
         </label>
         <label className={s.note} style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
           <input type="radio" name="mode" value="edit" /> Back to the applicant — they may correct and resubmit. They
-          are emailed the reason.
+          are emailed the reason, and the closing period starts again.
         </label>
       </fieldset>
       <div className={ui.field}>
