@@ -4,80 +4,147 @@ import { notFound } from "next/navigation";
 import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { StaffShell } from "@/components/StaffShell";
-import { ComplianceForm, DecisionForm, DocumentReview, ObservationForm, PaymentForm, ReopenForm, SponsorActions } from "@/components/ReviewForms";
+import {
+  ComplianceForm,
+  DecisionForm,
+  DocumentReview,
+  ObservationForm,
+  PaymentForm,
+  ReopenForm,
+  SponsorActions,
+} from "@/components/ReviewForms";
 import { getBankDetails } from "@/lib/settings";
 import { muDate } from "@/lib/business-days";
 import { hasRole, requireStaffPage } from "@/lib/staff";
 import { DOCUMENT_REQUIREMENTS, monthsSince } from "@/lib/applications";
 import { formatDateEn, formatDateTimeEn, formatSizeEn } from "@/lib/format";
 import { DOC_EN, STATUS_EN } from "@/lib/staff-labels";
-import { closesOn, deletesOn, retentionRules } from "@/lib/application-retention";
+import {
+  closesOn,
+  deletesOn,
+  retentionRules,
+} from "@/lib/application-retention";
 import type { Staff } from "@/lib/staff";
 import s from "@/components/staff.module.css";
 import ui from "@/components/ui.module.css";
 
 export const metadata: Metadata = { title: "Application review" };
 
-
-export default async function ApplicationReview({ params }: { params: Promise<{ id: string }> }) {
+export default async function ApplicationReview({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const staff = await requireStaffPage();
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const db = getDb();
 
-  const [app] = await db.select().from(schema.applications).where(eq(schema.applications.id, id)).limit(1);
+  const [app] = await db
+    .select()
+    .from(schema.applications)
+    .where(eq(schema.applications.id, id))
+    .limit(1);
   if (!app) {
     // ADM-06: a deleted application leaves a record for reports; old links show it.
-    const [rec] = await db.select().from(schema.applicationRecords).where(eq(schema.applicationRecords.id, id)).limit(1);
+    const [rec] = await db
+      .select()
+      .from(schema.applicationRecords)
+      .where(eq(schema.applicationRecords.id, id))
+      .limit(1);
     if (!rec) notFound();
     return <DeletedApplication staff={staff} rec={rec} />;
   }
   const rules = await retentionRules();
 
   const [account, type, sponsors, docs, events, staffList] = await Promise.all([
-    db.select().from(schema.accounts).where(eq(schema.accounts.id, app.accountId)).limit(1).then((r) => r[0]),
+    db
+      .select()
+      .from(schema.accounts)
+      .where(eq(schema.accounts.id, app.accountId))
+      .limit(1)
+      .then((r) => r[0]),
     app.membershipTypeId
-      ? db.select().from(schema.membershipTypes).where(eq(schema.membershipTypes.id, app.membershipTypeId)).limit(1).then((r) => r[0])
+      ? db
+          .select()
+          .from(schema.membershipTypes)
+          .where(eq(schema.membershipTypes.id, app.membershipTypeId))
+          .limit(1)
+          .then((r) => r[0])
       : Promise.resolve(undefined),
-    db.select().from(schema.applicationSponsors).where(eq(schema.applicationSponsors.applicationId, id)).orderBy(asc(schema.applicationSponsors.position)),
+    db
+      .select()
+      .from(schema.applicationSponsors)
+      .where(eq(schema.applicationSponsors.applicationId, id))
+      .orderBy(asc(schema.applicationSponsors.position)),
     db
       .select()
       .from(schema.documents)
-      .where(and(eq(schema.documents.applicationId, id), isNull(schema.documents.supersededAt)))
+      .where(
+        and(
+          eq(schema.documents.applicationId, id),
+          isNull(schema.documents.supersededAt),
+        ),
+      )
       .orderBy(asc(schema.documents.uploadedAt)),
-    db.select().from(schema.applicationEvents).where(eq(schema.applicationEvents.applicationId, id)).orderBy(desc(schema.applicationEvents.at)),
-    db.select({ id: schema.staffUsers.id, name: schema.staffUsers.displayName }).from(schema.staffUsers),
+    db
+      .select()
+      .from(schema.applicationEvents)
+      .where(eq(schema.applicationEvents.applicationId, id))
+      .orderBy(desc(schema.applicationEvents.at)),
+    db
+      .select({ id: schema.staffUsers.id, name: schema.staffUsers.displayName })
+      .from(schema.staffUsers),
   ]);
   const bank = await getBankDetails();
   const [member] = await db
-    .select({ id: schema.members.id, memberNumber: schema.members.memberNumber })
+    .select({
+      id: schema.members.id,
+      memberNumber: schema.members.memberNumber,
+    })
     .from(schema.members)
     .where(eq(schema.members.applicationId, id))
     .limit(1);
   const joiningPayments = await db
     .select()
     .from(schema.payments)
-    .where(and(eq(schema.payments.applicationId, id), eq(schema.payments.purpose, "joining")))
+    .where(
+      and(
+        eq(schema.payments.applicationId, id),
+        eq(schema.payments.purpose, "joining"),
+      ),
+    )
     .orderBy(desc(schema.payments.createdAt));
   const joining = joiningPayments.find((p) => p.status === "paid");
   const cardAttempts = joiningPayments.filter((p) => p.method === "card");
-  const staffName = (sid: string | null) => staffList.find((x) => x.id === sid)?.name ?? "";
+  const staffName = (sid: string | null) =>
+    staffList.find((x) => x.id === sid)?.name ?? "";
 
   const inReview = app.status === "submitted";
   const required = DOCUMENT_REQUIREMENTS.filter((r) => r.required);
-  const verifiedCount = required.filter((r) => docs.some((d) => d.kind === r.kind && d.reviewStatus === "verified")).length;
-  const rejectedCount = docs.filter((d) => d.reviewStatus === "rejected").length;
+  const verifiedCount = required.filter((r) =>
+    docs.some((d) => d.kind === r.kind && d.reviewStatus === "verified"),
+  ).length;
+  const rejectedCount = docs.filter(
+    (d) => d.reviewStatus === "rejected",
+  ).length;
   const kycDone = verifiedCount === required.length;
   const complianceDone = app.complianceStatus === "cleared";
   const blockers = [
-    ...(kycDone ? [] : [`all 4 KYC documents verified (${verifiedCount} of 4 so far)`]),
+    ...(kycDone
+      ? []
+      : [`all 4 KYC documents verified (${verifiedCount} of 4 so far)`]),
     ...(complianceDone ? [] : ["the Compliance Review is cleared"]),
   ];
   const sponsorsConfirmed = sponsors.filter((sp) => sp.confirmedAt).length;
 
   const dot = (state: "ok" | "warn" | "bad" | "idle") =>
     `${s.dot} ${state === "ok" ? s.dotOk : state === "warn" ? s.dotWarn : state === "bad" ? s.dotBad : s.dotIdle}`;
-  const decided = app.status === "approved" || app.status === "admitted" || app.status === "rejected" || app.status === "deferred";
+  const decided =
+    app.status === "approved" ||
+    app.status === "admitted" ||
+    app.status === "rejected" ||
+    app.status === "deferred";
 
   return (
     <StaffShell staff={staff} active="applications">
@@ -88,48 +155,90 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
         <h1 className={s.title}>
           {app.firstNames} {app.lastName}
         </h1>
-        <span className={`${s.pill} ${s[STATUS_EN[app.status][1]]}`}>{STATUS_EN[app.status][0]}</span>
+        <span className={`${s.pill} ${s[STATUS_EN[app.status][1]]}`}>
+          {STATUS_EN[app.status][0]}
+        </span>
       </div>
       <p className={s.note} style={{ margin: 0 }}>
-        {app.reference} · {type?.name ?? "Type not chosen"} · Date de réception du dossier :{" "}
-        {app.receivedAt ? formatDateEn(app.receivedAt) : "—"}
-        {app.submissionCount > 1 ? ` · resubmitted (${app.submissionCount} submissions)` : " · first submission"}
+        {app.reference} · {type?.name ?? "Type not chosen"} · Date de réception
+        du dossier : {app.receivedAt ? formatDateEn(app.receivedAt) : "—"}
+        {app.submissionCount > 1
+          ? ` · resubmitted (${app.submissionCount} submissions)`
+          : " · first submission"}
       </p>
 
       <ol aria-label="Application progress" className={s.rail}>
         <li>
           <span className={dot(app.receivedAt ? "ok" : "idle")} />
           <span className={s.railText}>
-            Submitted<span className={s.railSub}>{app.lastSubmittedAt ? formatDateEn(app.lastSubmittedAt) : "Not yet"}</span>
+            Submitted
+            <span className={s.railSub}>
+              {app.lastSubmittedAt
+                ? formatDateEn(app.lastSubmittedAt)
+                : "Not yet"}
+            </span>
           </span>
         </li>
         <li>
-          <span className={dot(kycDone ? "ok" : rejectedCount ? "bad" : "warn")} />
+          <span
+            className={dot(kycDone ? "ok" : rejectedCount ? "bad" : "warn")}
+          />
           <span className={s.railText}>
             KYC
             <span className={s.railSub}>
-              {verifiedCount} of 4 verified{rejectedCount ? ` · ${rejectedCount} rejected` : ""}
+              {verifiedCount} of 4 verified
+              {rejectedCount ? ` · ${rejectedCount} rejected` : ""}
             </span>
           </span>
         </li>
         <li>
-          <span className={dot(complianceDone ? "ok" : app.complianceStatus === "not_cleared" ? "bad" : "warn")} />
+          <span
+            className={dot(
+              complianceDone
+                ? "ok"
+                : app.complianceStatus === "not_cleared"
+                  ? "bad"
+                  : "warn",
+            )}
+          />
           <span className={s.railText}>
             Compliance Review
             <span className={s.railSub}>
-              {app.complianceStatus === "cleared" ? "Cleared" : app.complianceStatus === "not_cleared" ? "Not cleared" : "Pending"}
+              {app.complianceStatus === "cleared"
+                ? "Cleared"
+                : app.complianceStatus === "not_cleared"
+                  ? "Not cleared"
+                  : "Pending"}
             </span>
           </span>
         </li>
         <li>
-          <span className={dot(app.status === "approved" || app.status === "admitted" ? "ok" : app.status === "rejected" || app.status === "deferred" ? "bad" : "idle")} />
+          <span
+            className={dot(
+              app.status === "approved" || app.status === "admitted"
+                ? "ok"
+                : app.status === "rejected" || app.status === "deferred"
+                  ? "bad"
+                  : "idle",
+            )}
+          />
           <span className={s.railText}>
             Decision
-            <span className={s.railSub}>{decided ? STATUS_EN[app.status][0].split(" ·")[0] : "Pending"}</span>
+            <span className={s.railSub}>
+              {decided ? STATUS_EN[app.status][0].split(" ·")[0] : "Pending"}
+            </span>
           </span>
         </li>
         <li>
-          <span className={dot(app.status === "admitted" ? "ok" : app.status === "approved" ? "warn" : "idle")} />
+          <span
+            className={dot(
+              app.status === "admitted"
+                ? "ok"
+                : app.status === "approved"
+                  ? "warn"
+                  : "idle",
+            )}
+          />
           <span className={s.railText}>
             Payment
             <span className={s.railSub}>
@@ -147,20 +256,57 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
         <div className={s.stack}>
           <section className={s.card} aria-labelledby="h-details">
             <h2 id="h-details" className={s.cardTitle}>
-              Applicant details <span className={s.note}>· Sections I and II</span>
+              Applicant details{" "}
+              <span className={s.note}>· Sections I and II</span>
             </h2>
             <dl className={s.dl}>
-              <div><dt>Nom</dt><dd>{app.lastName}</dd></div>
-              <div><dt>Prénoms</dt><dd>{app.firstNames}</dd></div>
-              <div><dt>Date de naissance</dt><dd>{app.dateOfBirth ? formatDateEn(app.dateOfBirth) : "—"}</dd></div>
-              <div><dt>Nationalité</dt><dd>{app.nationality}</dd></div>
-              <div><dt>CNI / Passeport No</dt><dd>{app.idNumber}</dd></div>
-              <div><dt>Adresse courriel</dt><dd>{account?.email}</dd></div>
-              <div className={s.span2}><dt>Adresse résidentielle</dt><dd>{app.residentialAddress}</dd></div>
-              <div><dt>Téléphone</dt><dd>{app.mobilePhone}{app.homePhone ? ` · ${app.homePhone}` : ""}</dd></div>
-              <div><dt>Profession / Occupation</dt><dd>{app.profession}</dd></div>
-              <div><dt>Employeur / société</dt><dd>{app.employerName || "—"}</dd></div>
-              <div><dt>Adresse professionnelle</dt><dd>{app.workAddress || "—"}</dd></div>
+              <div>
+                <dt>Nom</dt>
+                <dd>{app.lastName}</dd>
+              </div>
+              <div>
+                <dt>Prénoms</dt>
+                <dd>{app.firstNames}</dd>
+              </div>
+              <div>
+                <dt>Date de naissance</dt>
+                <dd>{app.dateOfBirth ? formatDateEn(app.dateOfBirth) : "—"}</dd>
+              </div>
+              <div>
+                <dt>Nationalité</dt>
+                <dd>{app.nationality}</dd>
+              </div>
+              <div>
+                <dt>CNI / Passeport No</dt>
+                <dd>{app.idNumber}</dd>
+              </div>
+              <div>
+                <dt>Adresse courriel</dt>
+                <dd>{account?.email}</dd>
+              </div>
+              <div className={s.span2}>
+                <dt>Adresse résidentielle</dt>
+                <dd>{app.residentialAddress}</dd>
+              </div>
+              <div>
+                <dt>Téléphone</dt>
+                <dd>
+                  {app.mobilePhone}
+                  {app.homePhone ? ` · ${app.homePhone}` : ""}
+                </dd>
+              </div>
+              <div>
+                <dt>Profession / Occupation</dt>
+                <dd>{app.profession}</dd>
+              </div>
+              <div>
+                <dt>Employeur / société</dt>
+                <dd>{app.employerName || "—"}</dd>
+              </div>
+              <div>
+                <dt>Adresse professionnelle</dt>
+                <dd>{app.workAddress || "—"}</dd>
+              </div>
               <div className={s.span2}>
                 <dt>Déclaration et signature</dt>
                 <dd>
@@ -183,7 +329,9 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
               const doc = docs.filter((d) => d.kind === req.kind).at(-1);
               if (!doc && !req.required) return null;
               const tooOld =
-                doc?.documentDate && req.maxAgeMonths && monthsSince(doc.documentDate) >= req.maxAgeMonths;
+                doc?.documentDate &&
+                req.maxAgeMonths &&
+                monthsSince(doc.documentDate) >= req.maxAgeMonths;
               const pill = !doc
                 ? [s.pillBad, "Missing"]
                 : doc.reviewStatus === "verified"
@@ -199,17 +347,32 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                     </span>
                     {doc ? (
                       <span className={s.rowMeta}>
-                        <a href={`/api/documents/${doc.id}`} target="_blank" rel="noopener noreferrer">
+                        <a
+                          href={`/api/documents/${doc.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
                           {doc.originalFilename}
                         </a>{" "}
-                        · {formatSizeEn(doc.sizeBytes)} · uploaded {formatDateEn(doc.uploadedAt)}
-                        {doc.documentDate ? ` · dated ${formatDateEn(doc.documentDate)}` : ""}
-                        {tooOld ? <strong style={{ color: "var(--warn)" }}> · older than {req.maxAgeMonths} months</strong> : null}
+                        · {formatSizeEn(doc.sizeBytes)} · uploaded{" "}
+                        {formatDateEn(doc.uploadedAt)}
+                        {doc.documentDate
+                          ? ` · dated ${formatDateEn(doc.documentDate)}`
+                          : ""}
+                        {tooOld ? (
+                          <strong style={{ color: "var(--warn)" }}>
+                            {" "}
+                            · older than {req.maxAgeMonths} months
+                          </strong>
+                        ) : null}
                       </span>
                     ) : null}
                     {doc?.reviewedAt ? (
                       <span className={s.note}>
-                        {doc.reviewStatus === "verified" ? "Verified" : "Rejected"} by {staffName(doc.reviewedById)},{" "}
+                        {doc.reviewStatus === "verified"
+                          ? "Verified"
+                          : "Rejected"}{" "}
+                        by {staffName(doc.reviewedById)},{" "}
                         {formatDateTimeEn(doc.reviewedAt)}
                         {doc.reviewComment ? ` — ${doc.reviewComment}` : ""}
                       </span>
@@ -221,7 +384,10 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                       key={`${doc.id}-${doc.reviewStatus}`}
                       documentId={doc.id}
                       status={doc.reviewStatus}
-                      canReview={inReview && hasRole(staff, "reviewer", "compliance_officer")}
+                      canReview={
+                        inReview &&
+                        hasRole(staff, "reviewer", "compliance_officer")
+                      }
                     />
                   ) : null}
                 </div>
@@ -265,12 +431,23 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                             : "Not yet requested"}
                     </span>
                   </div>
-                  <span className={`${s.pill} ${sp.confirmedAt ? s.pillOk : sp.declinedAt ? s.pillBad : s.pillWarn}`}>
-                    {sp.confirmedAt ? "Confirmed" : sp.declinedAt ? "Declined" : "Awaiting"}
+                  <span
+                    className={`${s.pill} ${sp.confirmedAt ? s.pillOk : sp.declinedAt ? s.pillBad : s.pillWarn}`}
+                  >
+                    {sp.confirmedAt
+                      ? "Confirmed"
+                      : sp.declinedAt
+                        ? "Declined"
+                        : "Awaiting"}
                   </span>
                   {!sp.confirmedAt &&
                   (app.status === "submitted" || app.status === "deferred") &&
-                  hasRole(staff, "reviewer", "compliance_officer", "administrator") ? (
+                  hasRole(
+                    staff,
+                    "reviewer",
+                    "compliance_officer",
+                    "administrator",
+                  ) ? (
                     <SponsorActions sponsorId={sp.id} email={sp.email} />
                   ) : null}
                 </div>
@@ -288,19 +465,29 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
               <span
                 className={`${s.pill} ${complianceDone ? s.pillOk : app.complianceStatus === "not_cleared" ? s.pillBad : s.pillIdle}`}
               >
-                {complianceDone ? "Cleared" : app.complianceStatus === "not_cleared" ? "Not cleared" : "Pending"}
+                {complianceDone
+                  ? "Cleared"
+                  : app.complianceStatus === "not_cleared"
+                    ? "Not cleared"
+                    : "Pending"}
               </span>
             </div>
             <p className={s.note} style={{ margin: 0 }}>
-              Identity, integrity and reputation checks under MTC’s AML-CFT policy.
+              Identity, integrity and reputation checks under MTC’s AML-CFT
+              policy.
               {app.complianceReviewedAt
                 ? ` Last recorded by ${staffName(app.complianceOfficerId)}, ${formatDateTimeEn(app.complianceReviewedAt)}${app.complianceComment ? ` — ${app.complianceComment}` : ""}.`
                 : ""}
             </p>
-            {inReview && hasRole(staff, "compliance_officer") ? <ComplianceForm applicationId={app.id} /> : null}
+            {inReview && hasRole(staff, "compliance_officer") ? (
+              <ComplianceForm applicationId={app.id} />
+            ) : null}
           </section>
 
-          <section className={`${s.card} ${s.cardStrong}`} aria-labelledby="h-decision">
+          <section
+            className={`${s.card} ${s.cardStrong}`}
+            aria-labelledby="h-decision"
+          >
             <h2 id="h-decision" className={s.cardTitle}>
               Decision
             </h2>
@@ -308,38 +495,59 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
               hasRole(staff, "reviewer") ? (
                 <DecisionForm
                   key={`${verifiedCount}-${app.complianceStatus}`}
-                  applicationId={app.id} canApprove={blockers.length === 0} blockers={blockers} />
+                  applicationId={app.id}
+                  canApprove={blockers.length === 0}
+                  blockers={blockers}
+                />
               ) : (
                 <p className={s.note}>A Reviewer records the decision.</p>
               )
             ) : (
               <>
-              <p
-                className={app.status === "approved" || app.status === "admitted" ? ui.alertOk : app.status === "draft" ? s.note : ui.alertInfo}
-                style={{ margin: 0 }}
-              >
-                {app.status === "draft"
-                  ? "The applicant has not submitted this application yet."
-                  : `${STATUS_EN[app.status][0]}${app.decidedAt ? ` by ${staffName(app.decidedById)}, ${formatDateTimeEn(app.decidedAt)}` : ""}${app.decisionComment ? ` — “${app.decisionComment}”` : ""}${app.status === "approved" && app.paymentDueAt ? `. Payment due by ${formatDateEn(app.paymentDueAt)}.` : ""}`}
-              </p>
-              {app.status === "deferred" || app.status === "rejected" ? (
-                <p className={s.note} style={{ margin: 0 }}>
-                  Closes automatically on {formatDateEn(closesOn(app, rules))}
-                  {app.status === "deferred" ? " unless the applicant resubmits" : ""}; deleted {rules.deleteAfterDays} days
-                  after closing.
+                <p
+                  className={
+                    app.status === "approved" || app.status === "admitted"
+                      ? ui.alertOk
+                      : app.status === "draft"
+                        ? s.note
+                        : ui.alertInfo
+                  }
+                  style={{ margin: 0 }}
+                >
+                  {app.status === "draft"
+                    ? "The applicant has not submitted this application yet."
+                    : `${STATUS_EN[app.status][0]}${app.decidedAt ? ` by ${staffName(app.decidedById)}, ${formatDateTimeEn(app.decidedAt)}` : ""}${app.decisionComment ? ` — “${app.decisionComment}”` : ""}${app.status === "approved" && app.paymentDueAt ? `. Payment due by ${formatDateEn(app.paymentDueAt)}.` : ""}`}
                 </p>
-              ) : null}
-              {app.status === "closed" && app.closedAt ? (
-                <p className={s.note} style={{ margin: 0 }}>
-                  Closed {formatDateEn(app.closedAt)}
-                  {app.closedFromStatus ? ` after being ${STATUS_EN[app.closedFromStatus][0].toLowerCase()}` : ""}. The application
-                  and its KYC documents will be deleted on <strong>{formatDateEn(deletesOn(app.closedAt, rules))}</strong>; the
-                  name, outcome and reason stay in Reports for {rules.keepRecordMonths} months.
-                </p>
-              ) : null}
-              {(app.status === "rejected" || app.status === "closed") && hasRole(staff, "administrator") ? (
-                <ReopenForm applicationId={app.id} closed={app.status === "closed"} />
-              ) : null}
+                {app.status === "deferred" || app.status === "rejected" ? (
+                  <p className={s.note} style={{ margin: 0 }}>
+                    Closes automatically on {formatDateEn(closesOn(app, rules))}
+                    {app.status === "deferred"
+                      ? " unless the applicant resubmits"
+                      : ""}
+                    ; deleted {rules.deleteAfterDays} days after closing.
+                  </p>
+                ) : null}
+                {app.status === "closed" && app.closedAt ? (
+                  <p className={s.note} style={{ margin: 0 }}>
+                    Closed {formatDateEn(app.closedAt)}
+                    {app.closedFromStatus
+                      ? ` after being ${STATUS_EN[app.closedFromStatus][0].toLowerCase()}`
+                      : ""}
+                    . The application and its KYC documents will be deleted on{" "}
+                    <strong>
+                      {formatDateEn(deletesOn(app.closedAt, rules))}
+                    </strong>
+                    ; the name, outcome and reason stay in Reports for{" "}
+                    {rules.keepRecordMonths} months.
+                  </p>
+                ) : null}
+                {(app.status === "rejected" || app.status === "closed") &&
+                hasRole(staff, "administrator") ? (
+                  <ReopenForm
+                    applicationId={app.id}
+                    closed={app.status === "closed"}
+                  />
+                ) : null}
               </>
             )}
           </section>
@@ -350,34 +558,48 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                 <h2 id="h-payment" className={s.cardTitle}>
                   Joining payment
                 </h2>
-                <span className={`${s.pill} ${app.status === "admitted" ? s.pillOk : s.pillWarn}`}>
+                <span
+                  className={`${s.pill} ${app.status === "admitted" ? s.pillOk : s.pillWarn}`}
+                >
                   {app.status === "admitted" ? "Paid" : "Awaiting payment"}
                 </span>
               </div>
               {app.status === "admitted" && joining ? (
                 <p className={s.note} style={{ margin: 0 }}>
-                  Rs {(joining.amountCents / 100).toFixed(2)} received {formatDateEn(joining.paidAt)} by{" "}
+                  Rs {(joining.amountCents / 100).toFixed(2)} received{" "}
+                  {formatDateEn(joining.paidAt)} by{" "}
                   {joining.method.replace("_", " ")}
                   {joining.reference ? `, ref. ${joining.reference}` : ""}
-                  {joining.method === "card" ? ", confirmed with Peach Payments" : `, recorded by ${staffName(joining.recordedById)}`}.
-                  {member ? ` Member no. ${member.memberNumber}.` : ""}
+                  {joining.method === "card"
+                    ? ", confirmed with Peach Payments"
+                    : `, recorded by ${staffName(joining.recordedById)}`}
+                  .{member ? ` Member no. ${member.memberNumber}.` : ""}
                 </p>
               ) : (
                 <>
                   <p className={s.note} style={{ margin: 0 }}>
-                    Due by {formatDateEn(app.paymentDueAt)}. The applicant can pay by card online (confirmed
-                    automatically) or transfer to {bank.bankName}, account {bank.accountNumber} ({bank.accountHolder}), quoting{" "}
-                    <strong>{app.reference}</strong>. Record a transfer, cash or cheque here.
+                    Due by {formatDateEn(app.paymentDueAt)}. The applicant can
+                    pay by card online (confirmed automatically) or transfer to{" "}
+                    {bank.bankName}, account {bank.accountNumber} (
+                    {bank.accountHolder}), quoting{" "}
+                    <strong>{app.reference}</strong>. Record a transfer, cash or
+                    cheque here.
                   </p>
                   {hasRole(staff, "finance") ? (
                     <PaymentForm
                       applicationId={app.id}
-                      suggestedAmount={type && type.feeCents > 0 ? (type.feeCents / 100).toFixed(2) : ""}
+                      suggestedAmount={
+                        type && type.feeCents > 0
+                          ? (type.feeCents / 100).toFixed(2)
+                          : ""
+                      }
                       today={muDate(new Date())}
                       reference={app.reference}
                     />
                   ) : (
-                    <p className={s.note}>Finance records the payment when it is received.</p>
+                    <p className={s.note}>
+                      Finance records the payment when it is received.
+                    </p>
                   )}
                 </>
               )}
@@ -387,20 +609,30 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
           {cardAttempts.length ? (
             <section className={s.card} aria-labelledby="h-card">
               <h2 id="h-card" className={s.cardTitle}>
-                Online card payments <span className={s.note}>· Peach Payments</span>
+                Online card payments{" "}
+                <span className={s.note}>· Peach Payments</span>
               </h2>
               <ul className={s.log}>
                 {cardAttempts.map((p) => (
                   <li key={p.id}>
                     <span className={s.logHead}>
-                      {formatDateTimeEn(p.createdAt)} · Rs {(p.amountCents / 100).toFixed(2)} ·{" "}
-                      <span className={`${s.pill} ${p.status === "paid" ? s.pillOk : p.status === "pending" ? s.pillInfo : s.pillBad}`}>
-                        {p.status === "pending" ? "Started, not completed" : p.status === "paid" ? "Paid" : "Failed"}
+                      {formatDateTimeEn(p.createdAt)} · Rs{" "}
+                      {(p.amountCents / 100).toFixed(2)} ·{" "}
+                      <span
+                        className={`${s.pill} ${p.status === "paid" ? s.pillOk : p.status === "pending" ? s.pillInfo : s.pillBad}`}
+                      >
+                        {p.status === "pending"
+                          ? "Started, not completed"
+                          : p.status === "paid"
+                            ? "Paid"
+                            : "Failed"}
                       </span>
                     </span>
                     <span className={s.note}>
                       Ref. {p.reference}
-                      {p.gatewayTransactionId ? ` · Peach transaction ${p.gatewayTransactionId}` : ""}
+                      {p.gatewayTransactionId
+                        ? ` · Peach transaction ${p.gatewayTransactionId}`
+                        : ""}
                       {p.failureReason ? ` · ${p.failureReason}` : ""}
                     </span>
                   </li>
@@ -411,7 +643,8 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
 
           <section className={s.card} aria-labelledby="h-log">
             <h2 id="h-log" className={s.cardTitle}>
-              Observations <span className={s.note}>· Date / Sujet / Commentaires</span>
+              Observations{" "}
+              <span className={s.note}>· Date / Sujet / Commentaires</span>
             </h2>
             <ul className={s.log}>
               {events.map((e) => (
@@ -420,14 +653,22 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
                     {formatDateTimeEn(e.at)} · {e.subject ?? e.eventType}
                   </span>
                   {e.comment ? <span>{e.comment}</span> : null}
-                  {e.staffUserId && !e.comment?.includes(staffName(e.staffUserId)) ? (
+                  {e.staffUserId &&
+                  !e.comment?.includes(staffName(e.staffUserId)) ? (
                     <span className={s.note}>{staffName(e.staffUserId)}</span>
                   ) : null}
-                  {e.internal ? <span className={s.internal}>Internal</span> : null}
+                  {e.internal ? (
+                    <span className={s.internal}>Internal</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
-            {hasRole(staff, "reviewer", "compliance_officer", "administrator") ? (
+            {hasRole(
+              staff,
+              "reviewer",
+              "compliance_officer",
+              "administrator",
+            ) ? (
               <ObservationForm applicationId={app.id} />
             ) : null}
           </section>
@@ -438,7 +679,13 @@ export default async function ApplicationReview({ params }: { params: Promise<{ 
 }
 
 /** ADM-06: what is left of a deleted application. */
-function DeletedApplication({ staff, rec }: { staff: Staff; rec: typeof schema.applicationRecords.$inferSelect }) {
+function DeletedApplication({
+  staff,
+  rec,
+}: {
+  staff: Staff;
+  rec: typeof schema.applicationRecords.$inferSelect;
+}) {
   return (
     <StaffShell staff={staff} active="applications">
       <span className={s.crumb}>
@@ -455,27 +702,41 @@ function DeletedApplication({ staff, rec }: { staff: Staff; rec: typeof schema.a
           Retained record
         </h2>
         <p className={s.note} style={{ margin: 0 }}>
-          This application was closed and then deleted on {formatDateEn(rec.deletedAt)}, with its form, sponsors, history and
-          KYC documents. Only the details below are kept, for reports, until {formatDateEn(rec.retainUntil)}. The audit log
-          still lists every action taken on it.
+          This application was closed and then deleted on{" "}
+          {formatDateEn(rec.deletedAt)}, with its form, sponsors, history and
+          KYC documents. Only the details below are kept, for reports, until{" "}
+          {formatDateEn(rec.retainUntil)}. The audit log still lists every
+          action taken on it.
         </p>
         <dl className={s.dl}>
-          <dt>Reference</dt>
-          <dd>{rec.reference}</dd>
-          <dt>Membership type</dt>
-          <dd>{rec.membershipTypeName ?? "—"}</dd>
-          <dt>Received</dt>
-          <dd>{rec.receivedAt ? formatDateEn(rec.receivedAt) : "—"}</dd>
-          <dt>Outcome</dt>
-          <dd>
-            {rec.outcome === "rejected" ? "Rejected" : "Deferred"}
-            {rec.decidedAt ? ` on ${formatDateEn(rec.decidedAt)}` : ""}
-            {rec.decidedByName ? ` by ${rec.decidedByName}` : ""}
-          </dd>
-          <dt>Reason</dt>
-          <dd>{rec.reason || "—"}</dd>
-          <dt>Closed</dt>
-          <dd>{rec.closedAt ? formatDateEn(rec.closedAt) : "—"}</dd>
+          <div>
+            <dt>Reference</dt>
+            <dd>{rec.reference}</dd>
+          </div>
+          <div>
+            <dt>Membership type</dt>
+            <dd>{rec.membershipTypeName ?? "—"}</dd>
+          </div>
+          <div>
+            <dt>Received</dt>
+            <dd>{rec.receivedAt ? formatDateEn(rec.receivedAt) : "—"}</dd>
+          </div>
+          <div>
+            <dt>Outcome</dt>
+            <dd>
+              {rec.outcome === "rejected" ? "Rejected" : "Deferred"}
+              {rec.decidedAt ? ` on ${formatDateEn(rec.decidedAt)}` : ""}
+              {rec.decidedByName ? ` by ${rec.decidedByName}` : ""}
+            </dd>
+          </div>
+          <div className={s.span2}>
+            <dt>Reason</dt>
+            <dd>{rec.reason || "—"}</dd>
+          </div>
+          <div>
+            <dt>Closed</dt>
+            <dd>{rec.closedAt ? formatDateEn(rec.closedAt) : "—"}</dd>
+          </div>
         </dl>
       </section>
     </StaffShell>
