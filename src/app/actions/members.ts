@@ -19,7 +19,7 @@ export async function updateMemberDetails(memberId: string, _prev: FormState, fd
   const staff = await requireStaffAction("reviewer", "administrator");
   const values = Object.fromEntries(Object.keys(EDITABLE_FIELDS).map((k) => [k, str(fd, k)])) as Record<Field, string>;
   const fieldErrors: Record<string, string> = {};
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) fieldErrors.email = "Enter a valid email address.";
+  if (values.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) fieldErrors.email = "Enter a valid email address.";
   if (values.mobilePhone && !/^[+\d][\d\s-]{6,19}$/.test(values.mobilePhone)) fieldErrors.mobilePhone = "Enter a valid phone number.";
   if (values.homePhone && !/^[+\d][\d\s-]{6,19}$/.test(values.homePhone)) fieldErrors.homePhone = "Enter a valid phone number.";
   if (Object.keys(fieldErrors).length) return { error: "Check the highlighted fields.", fieldErrors, values };
@@ -35,7 +35,7 @@ export async function updateMemberDetails(memberId: string, _prev: FormState, fd
   await db.transaction(async (tx) => {
     await tx
       .update(schema.members)
-      .set({ ...Object.fromEntries(changed.map((k) => [k, values[k] || null])), updatedAt: new Date() })
+      .set({ ...Object.fromEntries(changed.map((k) => [k, k === "email" ? values[k] : values[k] || null])), updatedAt: new Date() })
       .where(eq(schema.members.id, memberId));
     await tx.insert(schema.memberDetailChanges).values(
       changed.map((k) => ({

@@ -6,7 +6,7 @@ import { SiteHeader } from "./SiteHeader";
 import { ROLE_LABELS, type Staff } from "@/lib/staff";
 import s from "./staff.module.css";
 
-export type StaffSection = "applications" | "members" | "upgrades" | "payments" | "reports" | "settings";
+export type StaffSection = "overview" | "applications" | "members" | "upgrades" | "payments" | "reports" | "settings";
 
 /** Frame for staff pages. Staff pages are in English until MTC decides on the language question. */
 export async function StaffShell({
@@ -25,12 +25,13 @@ export async function StaffShell({
   const pendingUpgrades = await pendingUpgradeCount();
 
   const items: { key: StaffSection; label: string; href?: string; badge?: number }[] = [
+    { key: "overview", label: "Overview", href: "/staff/overview" },
     { key: "applications", label: "Applications", href: "/staff/applications", badge: toReview },
     { key: "members", label: "Members", href: "/staff/members" },
     { key: "upgrades", label: "Upgrades", href: "/staff/upgrades", badge: pendingUpgrades },
     { key: "payments", label: "Payments", href: "/staff/payments" },
     { key: "reports", label: "Reports", href: "/staff/reports" },
-    { key: "settings", label: "Settings" },
+    { key: "settings", label: "Settings", href: "/staff/settings" },
   ];
 
   return (

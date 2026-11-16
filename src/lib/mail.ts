@@ -34,6 +34,15 @@ export async function sendEmail(email: OutgoingEmail): Promise<boolean> {
     })
     .returning({ id: schema.emailLog.id });
 
+  // Members imported from the paper register may have no email address yet.
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.to)) {
+    await db
+      .update(schema.emailLog)
+      .set({ status: "failed", error: "No valid email address on record" })
+      .where(eq(schema.emailLog.id, logRow.id));
+    return false;
+  }
+
   const cfg = mailConfig();
   if (!cfg.apiKey || !cfg.fromAddress) {
     console.log(

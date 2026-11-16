@@ -377,3 +377,36 @@ ${button(p.link, "Accéder à mon espace")}`,
   const text = `Bonjour ${p.name},\n\nVotre cotisation due le ${p.dueLabel} n’a pas été reçue dans le délai de grâce. Votre adhésion (membre ${p.memberNumber}) est expirée. Contactez le secrétariat du Club pour la rétablir.\n\n${p.link}`;
   return { subject, html, text };
 }
+
+/** REN-02: reminder before (or on) the dues due date. */
+export function renewalReminderEmail(p: {
+  name: string;
+  memberNumber: string;
+  typeName: string;
+  feeLabel: string;
+  dueLabel: string;
+  daysBefore: number;
+  bankName: string;
+  accountHolder: string;
+  accountNumber: string;
+  link: string;
+}) {
+  const when = p.daysBefore === 0 ? "aujourd’hui" : `le ${p.dueLabel} (dans ${p.daysBefore} jour${p.daysBefore > 1 ? "s" : ""})`;
+  const subject = p.daysBefore === 0 ? `Votre cotisation est due aujourd’hui – membre ${p.memberNumber}` : `Rappel : votre cotisation arrive à échéance le ${p.dueLabel}`;
+  const html = layout(
+    "Renouvellement de votre adhésion",
+    `<p>Bonjour ${esc(p.name)},</p>
+<p>Votre cotisation de membre (${esc(p.typeName)}) de <strong>${esc(p.feeLabel)}</strong> arrive à échéance <strong>${esc(when)}</strong>.</p>
+${button(p.link, "Régler ma cotisation")}
+<p>Vous pouvez également régler par virement bancaire :</p>
+${kv([
+  ["Institution bancaire", p.bankName],
+  ["Titulaire du compte", p.accountHolder],
+  ["Numéro de compte", p.accountNumber],
+  ["Référence à indiquer", p.memberNumber],
+])}
+<p style="font-size:13px;color:#5b606b">Si vous avez déjà réglé votre cotisation, merci de ne pas tenir compte de ce message.</p>`,
+  );
+  const text = `Bonjour ${p.name},\n\nVotre cotisation (${p.typeName}) de ${p.feeLabel} arrive à échéance ${when}.\nRégler en ligne : ${p.link}\nOu par virement : ${p.bankName}, ${p.accountHolder}, compte ${p.accountNumber}, référence ${p.memberNumber}.`;
+  return { subject, html, text };
+}

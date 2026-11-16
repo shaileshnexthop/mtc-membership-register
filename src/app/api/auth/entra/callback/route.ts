@@ -87,5 +87,5 @@ export async function GET(request: NextRequest) {
     details: { roles: identity.roles },
   });
   await createSession({ staffUserId: staffId });
-  return to("/staff/applications");
+  return to("/staff/overview");
 }

@@ -1,6 +1,6 @@
 import { appBaseUrl } from "@/lib/config";
 import { clientIp } from "@/lib/request";
-import { confirmCheckout } from "@/lib/online-payments";
+import { confirmCheckout, returnPathForCheckout } from "@/lib/online-payments";
 
 /**
  * Peach sends the shopper's browser back here (POST, form-encoded) after Hosted Checkout.
@@ -14,7 +14,8 @@ async function handle(checkoutId: string) {
   } catch (err) {
     console.error("Peach return: status check failed", err);
   }
-  return Response.redirect(`${appBaseUrl()}/candidature/paiement?resultat=${result}`, 303);
+  const path = await returnPathForCheckout(checkoutId).catch(() => "/candidature/paiement");
+  return Response.redirect(`${appBaseUrl()}${path}?resultat=${result}`, 303);
 }
 
 export async function POST(request: Request) {

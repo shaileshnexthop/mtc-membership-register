@@ -78,6 +78,17 @@ export default async function AccountHomePage({
               <dt>Prochaine échéance</dt>
               <dd>{member.nextDueOn ? formatDateFr(member.nextDueOn) : "—"}</dd>
             </dl>
+            {member.status === "active" || member.status === "renewal_due" ? (
+              <p style={{ margin: 0 }}>
+                <Link href="/espace/cotisation" className={s.primary}>
+                  {member.status === "renewal_due" ? "Renouveler mon adhésion" : "Régler ma cotisation"}
+                </Link>
+              </p>
+            ) : (
+              <p className={a.small} style={{ margin: 0 }}>
+                Votre adhésion n’est pas active. Veuillez contacter le secrétariat du Club pour la rétablir.
+              </p>
+            )}
           </div>
           <div className={s.card}>
             <h2 className={a.sectionTitle} style={{ margin: 0 }}>Mes paiements</h2>

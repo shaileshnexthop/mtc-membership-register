@@ -12,6 +12,7 @@ import {
   applicationDeferredEmail,
   membershipLapsedEmail,
   paymentReminderEmail,
+  renewalReminderEmail,
   upgradeRequestedStaffEmail,
 } from "./email-templates";
 
@@ -27,6 +28,7 @@ export async function runDailyJob(now = new Date()) {
     deferred: await deferUnpaidApplications(now),
     paymentReminders: officeHours ? await sendPaymentReminders(now) : 0,
     upgradeReminders: officeHours ? await sendUpgradeReminders(now) : 0,
+    renewalReminders: officeHours ? await sendRenewalReminders(now) : 0,
     renewalDue: await markRenewalDue(),
     lapsed: officeHours ? await lapseAfterGrace() : 0,
   };
@@ -122,10 +124,12 @@ async function sendPaymentReminders(now: Date): Promise<number> {
   return n;
 }
 
-/** UPG-07: pending changes not decided within 3 business days are re-sent to the Approvers daily. */
+/** UPG-07: pending changes not decided within the set business days are re-sent to the Approvers daily. */
 async function sendUpgradeReminders(now: Date): Promise<number> {
   const db = getDb();
   const today = muDate(now);
+  const st = await getSettings(["upgrade_reminder_business_days"]);
+  const afterDays = Number(st.upgrade_reminder_business_days ?? 3) || 3;
   const pending = await db
     .select({
       u: schema.upgradeRequests,
@@ -138,7 +142,7 @@ async function sendUpgradeReminders(now: Date): Promise<number> {
     .where(eq(schema.upgradeRequests.status, "pending"));
   let n = 0;
   for (const { u, m, requester } of pending) {
-    if ((await businessDaysAfter(muDate(u.requestedAt), today)) < 3) continue;
+    if ((await businessDaysAfter(muDate(u.requestedAt), today)) < afterDays) continue;
     if (u.lastReminderAt && muDate(u.lastReminderAt) === today) continue;
     const types = await db
       .select()
@@ -226,4 +230,53 @@ async function lapseAfterGrace(): Promise<number> {
     await sendEmail({ to: m.email, templateKey: "membership_lapsed", memberId: m.id, ...mail });
   }
   return rows.length;
+}
+
+/** REN-02: reminders the set number of days before the due date (and on the day), once a day each. */
+async function sendRenewalReminders(now: Date): Promise<number> {
+  const db = getDb();
+  const s = await getSettings(["renewal_reminder_days_before"]);
+  const days = Array.isArray(s.renewal_reminder_days_before) ? (s.renewal_reminder_days_before as number[]) : [14, 7, 0];
+  if (!days.length) return 0;
+  const today = muDate(now);
+  const horizon = new Date(`${today}T12:00:00Z`);
+  horizon.setUTCDate(horizon.getUTCDate() + Math.max(...days));
+  const rows = await db
+    .select({
+      m: schema.members,
+      typeName: schema.membershipTypes.name,
+      feeCents: schema.membershipTypes.feeCents,
+      feePeriod: schema.membershipTypes.feePeriod,
+      remindedToday: sql<boolean>`exists (select 1 from email_log e where e.member_id = ${schema.members.id}
+        and e.template_key = 'renewal_reminder' and (e.created_at at time zone 'Indian/Mauritius')::date = ${today}::date)`,
+    })
+    .from(schema.members)
+    .innerJoin(schema.membershipTypes, eq(schema.membershipTypes.id, schema.members.membershipTypeId))
+    .where(
+      and(
+        eq(schema.members.status, "active"),
+        sql`${schema.members.nextDueOn} >= ${today}::date`,
+        lte(schema.members.nextDueOn, horizon.toISOString().slice(0, 10)),
+      ),
+    );
+  const bank = await getBankDetails();
+  let n = 0;
+  for (const r of rows) {
+    if (r.remindedToday || !r.m.nextDueOn) continue;
+    const daysBefore = Math.round((Date.parse(`${r.m.nextDueOn}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
+    if (!days.includes(daysBefore)) continue;
+    const mail = renewalReminderEmail({
+      name: `${r.m.firstNames} ${r.m.lastName}`,
+      memberNumber: r.m.memberNumber,
+      typeName: r.typeName,
+      feeLabel: feeLabelFr(r.feeCents || r.m.currentFeeCents, r.feePeriod),
+      dueLabel: formatDateFr(r.m.nextDueOn),
+      daysBefore,
+      ...bank,
+      link: `${appBaseUrl()}/espace/cotisation`,
+    });
+    await sendEmail({ to: r.m.email, templateKey: "renewal_reminder", memberId: r.m.id, ...mail });
+    n++;
+  }
+  return n;
 }

@@ -23,7 +23,7 @@ export default async function StaffSignIn({
 }) {
   const params = await searchParams;
   const error = typeof params.error === "string" ? params.error : "";
-  if (!error && (await getCurrentStaff())) redirect("/staff/applications");
+  if (!error && (await getCurrentStaff())) redirect("/staff/overview");
   return (
     <div className={ui.page}>
       <SiteHeader />

@@ -13,8 +13,8 @@ export default async function LoginPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = await searchParams;
-  const suite = params.suite === "paiement" ? "paiement" : undefined;
-  if (await getCurrentAccount()) redirect(suite ? "/candidature/paiement" : "/espace");
+  const suite = params.suite === "paiement" || params.suite === "cotisation" ? params.suite : undefined;
+  if (await getCurrentAccount()) redirect(suite === "paiement" ? "/candidature/paiement" : suite === "cotisation" ? "/espace/cotisation" : "/espace");
   return (
     <PublicShell>
       <div className={s.card}>
