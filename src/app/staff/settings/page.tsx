@@ -18,7 +18,7 @@ export default async function SettingsTypesPage() {
   const types = await db
     .select({
       t: schema.membershipTypes,
-      members: sql<number>`(select count(*)::int from members m where m.membership_type_id = ${schema.membershipTypes.id} and m.status in ('active','renewal_due'))`,
+      members: sql<number>`(select count(*)::int from members m where m.membership_type_id = "membership_types"."id" and m.status in ('active','renewal_due'))`,
     })
     .from(schema.membershipTypes)
     .orderBy(asc(schema.membershipTypes.sortOrder), asc(schema.membershipTypes.name));
