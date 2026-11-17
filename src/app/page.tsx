@@ -5,7 +5,11 @@ import styles from "./page.module.css";
 export default function Home() {
   return (
     <div className={styles.page}>
-      <SiteHeader />
+      <SiteHeader>
+        <Link href="/staff" className={styles.staffLink}>
+          Personnel du Club
+        </Link>
+      </SiteHeader>
       <main className={styles.main}>
         <h1>Portail membre du Mauritius Turf Club</h1>
         <p>
@@ -20,9 +24,6 @@ export default function Home() {
             Se connecter
           </Link>
         </div>
-        <p className={styles.staff}>
-          Personnel du Club : <a href="/staff">connexion Microsoft 365</a>
-        </p>
       </main>
     </div>
   );
